@@ -215,20 +215,32 @@
               <p class="hint" style="margin-top:4px">
                 This server cannot see a screen, so frames have to be handed to it.
               </p>
-              <div class="actions pair" style="margin-top:10px">
+              <div class="actions" style="margin-top:10px">
                 <button class="btn btn-tonal sm" id="btn-screenshot">
                   <svg class="ic sm"><use href="#i-screen"/></svg>My screen
                 </button>
-                <button class="btn btn-tonal sm" id="btn-webcam">
-                  <svg class="ic sm"><use href="#i-camera"/></svg>Webcam
-                </button>
-                <button class="btn btn-tonal sm hidden" id="btn-snap">Snap &amp; judge</button>
               </div>
               <p class="hint" style="margin-top:8px" id="capture-hint"></p>
               <input type="file" id="frame-file" accept="image/*" class="hidden">
               <div class="dropzone" id="dropzone" style="margin-top:10px">
                 <svg class="ic" style="color:var(--on-surface-dim)"><use href="#i-upload"/></svg>
                 <div style="margin-top:6px">…or drop an image</div>
+              </div>
+            </div>
+
+            <!-- The camera is its own check, not a fallback for the screen: it reads
+                 the room, not the work. It stays whether or not the server can grab
+                 its own screen. -->
+            <div id="camera-check" style="margin-top:14px;border-top:1px solid var(--divider);padding-top:14px">
+              <div class="eyebrow dim">Camera check</div>
+              <p class="hint" style="margin-top:4px">
+                One glance at the desk — are you here, or is the phone in your hand?
+              </p>
+              <div class="actions" style="margin-top:10px">
+                <button class="btn btn-tonal sm" id="btn-webcam">
+                  <svg class="ic sm"><use href="#i-camera"/></svg>Webcam
+                </button>
+                <button class="btn btn-filled sm hidden" id="btn-snap">Snap &amp; judge</button>
               </div>
               <video id="webcam" class="hidden" autoplay playsinline muted></video>
             </div>
