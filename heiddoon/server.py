@@ -572,6 +572,21 @@ async def api_break(session_id: int, request: BreakRequest) -> dict[str, Any]:
     }
 
 
+@app.post("/api/session/{session_id}/break/prepare")
+async def api_break_prepare(session_id: int) -> dict[str, Any]:
+    """Generate the break question in the background, before it is asked for.
+
+    Returns immediately. The UI fires this once the student has produced some work, so
+    that pressing "Ask for a break" is instant rather than a wait on a model call. If
+    it has not finished by then, asking simply generates one the usual way.
+    """
+    session = _session(session_id)
+    if session._pending_quiz is not None:
+        return {"ready": True}
+    asyncio.create_task(asyncio.to_thread(session.prepare_break_question))
+    return {"ready": False, "preparing": True}
+
+
 @app.post("/api/session/{session_id}/break/answer")
 async def api_break_answer(session_id: int, request: AnswerRequest) -> dict[str, Any]:
     session = _session(session_id)
