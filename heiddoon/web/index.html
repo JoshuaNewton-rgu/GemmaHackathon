@@ -3,12 +3,24 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ProofStudy</title>
-<script>
-  try { document.documentElement.dataset.theme = localStorage.getItem("proofstudy.theme") || "light"; }
-  catch { document.documentElement.dataset.theme = "light"; }
-</script>
+<title>Heid Doon</title>
+<link rel="icon" href="/angry-nudge.gif" type="image/gif">
 <link rel="stylesheet" href="/app.css">
+<script>
+  /* Theme, before first paint — a stylesheet cannot read localStorage, and
+     applying this from app.js at the end of the body would show one theme and
+     then swap to the other. Their stored choice wins; with no choice on record
+     the OS setting decides. Inline, like everything else here: the app makes no
+     external requests. */
+  (function () {
+    var saved = null;
+    try { saved = localStorage.getItem("heiddoon.theme"); } catch (e) { /* private mode */ }
+    var dark = saved
+      ? saved === "dark"
+      : window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+    document.documentElement.dataset.theme = dark ? "dark" : "light";
+  })();
+</script>
 </head>
 <body>
 
@@ -24,7 +36,7 @@
   <symbol id="i-camera" viewBox="0 0 24 24"><path d="M3 8.5A1.5 1.5 0 014.5 7h2.2l1.2-2h6.2l1.2 2h4.2A1.5 1.5 0 0121 8.5v9A1.5 1.5 0 0119.5 19h-15A1.5 1.5 0 013 17.5v-9z"/><circle cx="12" cy="13" r="3.2"/></symbol>
   <symbol id="i-doc" viewBox="0 0 24 24"><path d="M6 2.5h8l4.5 4.5v14.5H6z"/><path d="M14 2.5V7h4.5M9 12h6M9 16h6"/></symbol>
   <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 019.5 4a8.5 8.5 0 1010.5 10.5z"/></symbol>
-  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M18.7 5.3l-1.4 1.4M6.7 17.3l-1.4 1.4"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.4M12 19.1v2.4M4.2 4.2l1.7 1.7M18.1 18.1l1.7 1.7M2.5 12h2.4M19.1 12h2.4M4.2 19.8l1.7-1.7M18.1 5.9l1.7-1.7"/></symbol>
   <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3zM18.5 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2z"/></symbol>
   <symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.6 2.6L16 9.5"/></symbol>
   <symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5M12 16h.01"/></symbol>
@@ -39,7 +51,7 @@
 <div class="app">
 
   <nav class="rail">
-    <div class="rail-logo">PS</div>
+    <div class="rail-logo"><img src="/angry-nudge.gif" alt="Heid Doon"></div>
     <button class="rail-btn active" data-screen="contract">
       <span class="pill"><svg class="ic"><use href="#i-draw"/></svg></span><span class="lbl">Contract</span>
     </button>
@@ -66,6 +78,9 @@
     <h1 id="bar-title">New session</h1>
     <span class="spacer"></span>
     <span class="bar-note" id="bar-note"></span>
+    <button class="icon-btn" id="btn-theme" type="button" aria-pressed="false" aria-label="Switch to dark">
+      <svg class="ic"><use href="#i-moon"/></svg>
+    </button>
     <span class="model-badge" id="model-badge">checking…</span>
     <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Switch to dark mode">
       <svg class="ic sm"><use id="theme-icon" href="#i-moon"/></svg>
@@ -220,20 +235,32 @@
               <p class="hint" style="margin-top:4px">
                 This server cannot see a screen, so frames have to be handed to it.
               </p>
-              <div class="actions pair" style="margin-top:10px">
+              <div class="actions" style="margin-top:10px">
                 <button class="btn btn-tonal sm" id="btn-screenshot">
                   <svg class="ic sm"><use href="#i-screen"/></svg>My screen
                 </button>
-                <button class="btn btn-tonal sm" id="btn-webcam">
-                  <svg class="ic sm"><use href="#i-camera"/></svg>Webcam
-                </button>
-                <button class="btn btn-tonal sm hidden" id="btn-snap">Snap &amp; judge</button>
               </div>
               <p class="hint" style="margin-top:8px" id="capture-hint"></p>
               <input type="file" id="frame-file" accept="image/*" class="hidden">
               <div class="dropzone" id="dropzone" style="margin-top:10px">
                 <svg class="ic" style="color:var(--on-surface-dim)"><use href="#i-upload"/></svg>
                 <div style="margin-top:6px">…or drop an image</div>
+              </div>
+            </div>
+
+            <!-- The camera is its own check, not a fallback for the screen: it reads
+                 the room, not the work. It stays whether or not the server can grab
+                 its own screen. -->
+            <div id="camera-check" style="margin-top:14px;border-top:1px solid var(--divider);padding-top:14px">
+              <div class="eyebrow dim">Camera check</div>
+              <p class="hint" style="margin-top:4px">
+                One glance at the desk — are you here, or is the phone in your hand?
+              </p>
+              <div class="actions" style="margin-top:10px">
+                <button class="btn btn-tonal sm" id="btn-webcam">
+                  <svg class="ic sm"><use href="#i-camera"/></svg>Webcam
+                </button>
+                <button class="btn btn-filled sm hidden" id="btn-snap">Snap &amp; judge</button>
               </div>
               <video id="webcam" class="hidden" autoplay playsinline muted></video>
             </div>

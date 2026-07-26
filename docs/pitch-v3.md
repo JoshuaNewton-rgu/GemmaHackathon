@@ -69,7 +69,7 @@ Seven frames buys you a real headline number **including the two cases that defe
 
 ### Honest limits (say these before a judge finds them)
 
-- Local inference doesn't work on *this* laptop: `gemma4:e4b` crashes on Intel Arc (GGML scheduler assertion), `gemma4:12b` needs 77s per vision call on CPU. **The live demo is hosted `gemma-4-31b-it`.** Never say "no cloud" on stage.
+- Local inference doesn't work on *this* laptop: `gemma4:e4b` crashes on Intel Arc (GGML scheduler assertion), `gemma4:12b` needs 77s per vision call on CPU. **The live demo is hosted `gemma-4-26b-a4b-it`.** Never say "no cloud" on stage.
 - Median verdict latency **15.1s** (max 17.6s). Fine at the web app's 60s auto-cadence; tight against the CLI watcher's 20s. `doctor` warns you.
 - Zero camera frames in the eval so far. Two captures fixes it.
 - Idle detection is Windows-only; elsewhere it assumes you're present, which is the safe direction.

@@ -154,6 +154,7 @@ class Session:
             started_at=self.started_at,
             last_break_at=self._last_break_at,
             kind=kind,
+            write_line=self.settings.write_nudge,
         )
         self.last_trace = outcome.to_dict()
 
@@ -587,17 +588,40 @@ class Session:
     # ── negotiate ───────────────────────────────────────────────────────────
 
     def request_break(self, notes: str | None = None) -> Quiz:
-        """Ask the Bouncer for a break: it asks one question back."""
+        """Ask the Bouncer for a break: it asks one question back.
+
+        A question prepared earlier is reused. Generating one takes a while, and a
+        student who has worked up the nerve to ask for a break should not then wait
+        half a minute to find out what it costs.
+        """
+        if notes is None and self._pending_quiz is not None:
+            return self._pending_quiz
         source = notes if notes is not None else self._artifact_text()
         quiz, _ = bouncer.ask_question(self.provider, source or "", contract=self.contract)
         self._pending_quiz = quiz
         return quiz
 
+    def prepare_break_question(self) -> Quiz | None:
+        """Generate the next break question ahead of being asked for it.
+
+        Called once there is work to ask about, so the question is drawn from what the
+        student has actually written rather than from the topic alone. Returns None
+        when there is nothing worth asking about yet — the caller is a background task
+        and has nothing to say about it either way.
+        """
+        if self._pending_quiz is not None:
+            return self._pending_quiz
+        if not self._artifact_text().strip():
+            return None
+        return self.request_break()
+
     def answer_break(self, answer: str, *, quiz: Quiz | None = None) -> Grade:
         target = quiz or self._pending_quiz
         if target is None:
             return Grade(passed=False, feedback="Ask for a break first and I will ask you something.")
-        grade, _ = bouncer.grade_answer(self.provider, target, answer)
+        grade, _ = bouncer.grade_answer(
+            self.provider, target, answer, fast=self.settings.fast_grade
+        )
         self._record(
             Event(
                 kind="quiz",

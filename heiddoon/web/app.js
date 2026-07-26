@@ -27,11 +27,12 @@ const state = {
   autoCadence: 60,
   pageCamStream: null,
   manualBusy: false,
+  breakPrepared: false,
   liveWords: 0,
 };
 
 const $ = (id) => document.getElementById(id);
-const el = (tag, cls, text) => {
+const el = (tag, cls, text = "") => {
   const node = document.createElement(tag);
   if (cls) node.className = cls;
   if (text !== undefined) node.textContent = text;
@@ -59,7 +60,7 @@ function applyTheme(theme) {
 $("theme-toggle").addEventListener("click", () => {
   const theme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
   applyTheme(theme);
-  try { localStorage.setItem("proofstudy.theme", theme); } catch { /* private mode */ }
+  try { localStorage.setItem("heiddoon.theme", theme); } catch { /* private mode */ }
 });
 applyTheme(document.documentElement.dataset.theme);
 
@@ -69,6 +70,42 @@ function snack(message, isError = false) {
   node.appendChild(el("span", null, message));
   document.body.appendChild(node);
   setTimeout(() => node.remove(), isError ? 7000 : 3500);
+}
+
+/* ── theme ───────────────────────────────────────────────────────────────
+   The attribute is already on <html> — the inline script in index.html sets it
+   before first paint. This only flips it and remembers the choice, which is
+   kept locally alongside the pace and never sent anywhere. Until they press the
+   button there is nothing stored, so the app keeps following the OS. */
+
+const THEME_KEY = "heiddoon.theme";
+const isDark = () => document.documentElement.dataset.theme === "dark";
+
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  const button = $("btn-theme");
+  const dark = theme === "dark";
+  const label = dark ? "Switch to light" : "Switch to dark";
+  button.setAttribute("aria-pressed", String(dark));
+  button.setAttribute("aria-label", label);
+  button.title = label;
+  button.querySelector("use").setAttribute("href", dark ? "#i-sun" : "#i-moon");
+}
+
+$("btn-theme").addEventListener("click", () => {
+  const next = isDark() ? "light" : "dark";
+  applyTheme(next);
+  try { localStorage.setItem(THEME_KEY, next); } catch { /* private mode */ }
+});
+
+// Someone whose machine switches at sunset should switch with it — but only
+// while they have not made a choice of their own.
+if (window.matchMedia) {
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (event) => {
+    let chosen = null;
+    try { chosen = localStorage.getItem(THEME_KEY); } catch { /* private mode */ }
+    if (!chosen) applyTheme(event.matches ? "dark" : "light");
+  });
 }
 
 async function api(path, options = {}) {
@@ -444,6 +481,14 @@ function subscribe(sessionId) {
     if ((event.kind === "screen" || event.kind === "camera")
         && $("scr-reasoning").classList.contains("active")) {
       refreshTrace({ at: event.at });
+    }
+    // The moment there is work to ask about, get the break question written in the
+    // background. Generating one takes long enough to be felt, and it always happens
+    // at the worst moment — when someone has just decided they need to stop.
+    if (!state.breakPrepared && (event.kind === "diff" || event.detail?.read_work)) {
+      state.breakPrepared = true;
+      api(`/api/session/${state.sessionId}/break/prepare`, { method: "POST" })
+        .catch(() => { state.breakPrepared = false; });
     }
   };
 }
@@ -1600,6 +1645,7 @@ function renderExpertReview(review) {
 }
 
 loadStatus();
+applyTheme(isDark() ? "dark" : "light");
 paintTone();
 if (window.location.hash.length > 1) show(window.location.hash.slice(1));
 void restoreSession();

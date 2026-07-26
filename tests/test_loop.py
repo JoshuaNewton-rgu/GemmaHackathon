@@ -90,7 +90,7 @@ class TestThoughtParts:
     def _provider():
         from heiddoon.providers.google_api import GoogleProvider
 
-        return GoogleProvider("gemma-4-31b-it", api_key="test-key")
+        return GoogleProvider("gemma-4-26b-a4b-it", api_key="test-key")
 
     def test_thought_parts_are_discarded(self):
         payload = {
