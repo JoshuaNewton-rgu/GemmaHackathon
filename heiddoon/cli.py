@@ -138,7 +138,9 @@ def cmd_capture(args: argparse.Namespace) -> int:
     if args.list or not args.name:
         print_status(testset)
         return 0
-    return capture_frame(args.name, testset, delay=args.delay, camera=args.camera)
+    return capture_frame(
+        args.name, testset, delay=args.delay, camera=args.camera, verify=not args.no_verify
+    )
 
 
 def cmd_eval(args: argparse.Namespace) -> int:
@@ -196,8 +198,11 @@ def build_parser() -> argparse.ArgumentParser:
     capture = subparsers.add_parser("capture", help="capture a real frame for the eval test set")
     capture.add_argument("name", nargs="?", help="label name, or any unique part of it")
     capture.add_argument("--testset", default=str(DEFAULT_TESTSET))
-    capture.add_argument("--delay", type=int, default=5, help="countdown seconds before the grab")
+    capture.add_argument("--delay", type=int, default=8, help="countdown seconds before the grab")
     capture.add_argument("--camera", action="store_true", help="force a webcam frame")
+    capture.add_argument(
+        "--no-verify", action="store_true", help="skip the model check on what was captured"
+    )
     capture.add_argument("--list", action="store_true", help="show what is captured and what is missing")
     capture.set_defaults(func=cmd_capture)
 

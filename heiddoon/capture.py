@@ -52,8 +52,24 @@ def print_status(testset: Path) -> None:
         print("\n  all real frames captured — run: python -m heiddoon eval")
 
 
-def capture_frame(name: str, testset: Path, *, delay: int = 5, camera: bool = False) -> int:
-    """Count down, grab a frame, save it under the labelled filename."""
+def capture_frame(
+    name: str,
+    testset: Path,
+    *,
+    delay: int = 8,
+    camera: bool = False,
+    verify: bool = True,
+) -> int:
+    """Count down, grab a frame, save it under the labelled filename, describe it.
+
+    The describe step is not a nicety. The first real capture taken with this
+    command grabbed the editor window it was typed into rather than the intended
+    lecture page, and the label said "lecture video" — so the eval scored a false
+    accusation against the model for a frame that was simply the wrong screenshot.
+    A mislabelled frame is worse than a missing one: missing frames are counted and
+    reported, wrong ones quietly corrupt the number. One extra call catches it while
+    you are still sitting there.
+    """
     labels = load_labels(testset)
     meta = labels.get(name)
     if meta is None:
@@ -92,8 +108,15 @@ def capture_frame(name: str, testset: Path, *, delay: int = 5, camera: bool = Fa
             print("  screen capture needs: pip install mss")
             return 1
 
+    if is_camera:
+        print("  get into position — the camera light will come on once.")
+    else:
+        print("  SWITCH NOW to the window you want captured. This grabs the whole screen,")
+        print("  so whatever is in front when the countdown ends is what gets scored.")
+    print()
+
     for remaining in range(delay, 0, -1):
-        print(f"  capturing in {remaining}… ", end="\r", flush=True)
+        print(f"  capturing in {remaining}…  ", end="\r", flush=True)
         time.sleep(1)
 
     if is_camera:
@@ -111,6 +134,37 @@ def capture_frame(name: str, testset: Path, *, delay: int = 5, camera: bool = Fa
     else:
         frame.save(path, "PNG")
 
-    print(f"  saved {path}  ({frame.width}×{frame.height})        ")
+    print(f"  saved {path}  ({frame.width}×{frame.height})            ")
+
+    if verify:
+        described = _describe(frame)
+        if described:
+            print(f"\n  the model sees: {described}")
+            print(f"  labelled as:    {expected}, {str(meta.get('note', '')).removeprefix('CAPTURE: ')}")
+            print("\n  If that description is not what you meant to capture, run the same")
+            print("  command again — it overwrites.")
+
     print_status(testset)
     return 0
+
+
+def _describe(frame: Any) -> str:
+    """One cheap call: what did we actually just capture?
+
+    Failures here are printed and ignored — a verification step must never be the
+    reason a capture is lost.
+    """
+    try:
+        from .providers import get_provider
+
+        provider = get_provider()
+        payload, meta = provider.complete_json(
+            'Describe what is on this screen in one short sentence. Schema: {"seen": str}',
+            image=frame,
+            max_tokens=150,
+        )
+        if not meta.ok:
+            return f"(could not check: {meta.error})"
+        return str(payload.get("seen", "")).strip()
+    except Exception as exc:  # noqa: BLE001 - never lose a capture over this
+        return f"(could not check: {exc})"

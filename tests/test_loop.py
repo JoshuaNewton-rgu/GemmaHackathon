@@ -67,6 +67,86 @@ class TestExtractJson:
         assert extract_json("I would rather not.") is None
 
 
+# ── reasoning models ────────────────────────────────────────────────────────
+
+
+class TestThoughtParts:
+    """Gemma 4 reasons before answering, and its thinking contains draft JSON.
+
+    Joining every part of the response together — the obvious implementation, and
+    what this code did first — meant the brace scanner could return a verdict the
+    model had considered and *rejected*. These lock the fix in place.
+    """
+
+    @staticmethod
+    def _provider():
+        from heiddoon.providers.google_api import GoogleProvider
+
+        return GoogleProvider("gemma-4-31b-it", api_key="test-key")
+
+    def test_thought_parts_are_discarded(self):
+        payload = {
+            "candidates": [{
+                "content": {"parts": [
+                    {"text": 'Maybe {"on_task": false}? No — it is a lecture.', "thought": True},
+                    {"text": '{"on_task": true}'},
+                ]},
+                "finishReason": "STOP",
+            }],
+        }
+        assert self._provider()._first_text(payload) == '{"on_task": true}'
+
+    def test_the_rejected_draft_is_not_what_gets_parsed(self):
+        from heiddoon.providers.base import extract_json
+
+        payload = {
+            "candidates": [{
+                "content": {"parts": [
+                    {"text": 'Draft: {"on_task": false}', "thought": True},
+                    {"text": '{"on_task": true}'},
+                ]},
+                "finishReason": "STOP",
+            }],
+        }
+        assert extract_json(self._provider()._first_text(payload)) == {"on_task": True}
+
+    def test_budget_exhausted_by_thinking_says_so(self):
+        from heiddoon.providers.base import ProviderError
+
+        payload = {
+            "candidates": [{
+                "content": {"parts": [{"text": "thinking…", "thought": True}]},
+                "finishReason": "MAX_TOKENS",
+            }],
+            "usageMetadata": {"thoughtsTokenCount": 340},
+        }
+        with pytest.raises(ProviderError, match="budget ran out"):
+            self._provider()._first_text(payload)
+
+    def test_usage_is_recorded_for_reporting(self):
+        provider = self._provider()
+        payload = {
+            "candidates": [{"content": {"parts": [{"text": "{}"}]}, "finishReason": "STOP"}],
+            "usageMetadata": {"promptTokenCount": 12, "candidatesTokenCount": 5, "thoughtsTokenCount": 115},
+        }
+        provider._first_text(payload)
+        assert provider._last_usage["thought_tokens"] == 115
+
+    def test_reasoning_overhead_is_added_to_the_caller_budget(self):
+        # A caller asking for 400 tokens of JSON must not have its whole budget
+        # eaten by invisible reasoning.
+        provider = self._provider()
+        seen = {}
+
+        def fake_generate(prompt, *, image=None, max_tokens=512, temperature=0.2, json_mode=False):
+            seen["max_tokens"] = max_tokens
+            return '{"ok": true}'
+
+        provider.generate = fake_generate  # type: ignore[method-assign]
+        provider.complete_json("prompt", max_tokens=400)
+        assert seen["max_tokens"] == 400 + provider.reasoning_overhead_tokens
+
+
 # ── schema coercion ─────────────────────────────────────────────────────────
 
 

@@ -21,6 +21,13 @@ ENDPOINT = "https://generativelanguage.googleapis.com/v1beta"
 class GoogleProvider(Provider):
     supports_json_mode = True
 
+    #: Gemma 4 reasons before answering, the thinking is billed against the same
+    #: `maxOutputTokens` as the answer, and `thinkingConfig.thinkingBudget = 0` is
+    #: rejected outright ("Thinking budget is not supported for this model"). A
+    #: trivial prompt spent 340 thought tokens against 46 of answer, so callers
+    #: get this much headroom on top of whatever their schema needs.
+    reasoning_overhead_tokens = 1536
+
     def __init__(
         self,
         model: str,
@@ -105,19 +112,52 @@ class GoogleProvider(Provider):
 
         return self._first_text(response.json())
 
-    @staticmethod
-    def _first_text(payload: dict[str, Any]) -> str:
+    def _first_text(self, payload: dict[str, Any]) -> str:
+        """Extract the answer, discarding the model's reasoning.
+
+        Gemma 4 is a reasoning model: a response comes back as several parts, the
+        thinking ones flagged `"thought": true`, followed by the answer. Joining
+        them all together — the obvious implementation — is a correctness bug, not
+        a cosmetic one. The thinking routinely contains draft JSON, including
+        options the model then rejects, so the brace scanner downstream would
+        happily return a verdict the model had decided *against*. Observed
+        directly: thinking containing `{"on_task": false}` in front of an answer of
+        `{"on_task": true}`.
+
+        So the thoughts are dropped here, at the boundary, and nothing above this
+        line ever sees them.
+        """
         candidates = payload.get("candidates") or []
         if not candidates:
             blocked = payload.get("promptFeedback", {}).get("blockReason")
             raise ProviderError(f"no candidates returned{f' (blocked: {blocked})' if blocked else ''}")
+
         candidate = candidates[0]
-        chunks = [
+        parts = candidate.get("content", {}).get("parts", [])
+        answer = [
             part["text"]
-            for part in candidate.get("content", {}).get("parts", [])
-            if isinstance(part.get("text"), str)
+            for part in parts
+            if isinstance(part.get("text"), str) and not part.get("thought")
         ]
-        if not chunks:
+
+        usage = payload.get("usageMetadata", {})
+        self._last_usage = {
+            "prompt_tokens": usage.get("promptTokenCount"),
+            "answer_tokens": usage.get("candidatesTokenCount"),
+            "thought_tokens": usage.get("thoughtsTokenCount"),
+        }
+
+        if not answer:
             reason = candidate.get("finishReason", "unknown")
+            thought_tokens = usage.get("thoughtsTokenCount") or 0
+            if reason == "MAX_TOKENS" or thought_tokens:
+                # The budget was consumed by reasoning before the answer began.
+                # `maxOutputTokens` caps thinking *and* answer together, and this
+                # model does not allow thinking to be limited or switched off.
+                raise ProviderError(
+                    f"the output budget ran out during reasoning ({thought_tokens} thought tokens, "
+                    f"no answer). Raise max_tokens — thinking is not optional on {self.model}."
+                )
             raise ProviderError(f"empty response (finishReason={reason})")
-        return "".join(chunks)
+
+        return "".join(answer)

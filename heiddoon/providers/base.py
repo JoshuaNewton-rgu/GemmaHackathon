@@ -40,6 +40,9 @@ class CallMeta:
     error: str = ""
     had_image: bool = False
     repairs: list[str] = field(default_factory=list)
+    #: Token counts when the backend reports them. On a reasoning model the
+    #: thought count is usually the largest number here, and worth showing.
+    usage: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -51,6 +54,7 @@ class CallMeta:
             "error": self.error,
             "had_image": self.had_image,
             "repairs": self.repairs,
+            "usage": self.usage,
         }
 
 
@@ -137,9 +141,20 @@ class Provider(ABC):
     #: by pleading in the prompt. Native mode removes most parse failures.
     supports_json_mode = False
 
+    #: Extra output budget a reasoning model needs before it starts answering.
+    #: On backends where hidden thinking is billed against the same token limit as
+    #: the answer, a caller asking for 400 tokens of JSON will otherwise have its
+    #: budget consumed entirely by reasoning and get nothing back. Callers state
+    #: what the *answer* needs; this covers the thinking they cannot see.
+    reasoning_overhead_tokens = 0
+
     def __init__(self, model: str, *, timeout: float = 180.0) -> None:
         self.model = model
         self.timeout = timeout
+        #: Best-effort telemetry from the most recent call, for eval reporting
+        #: only. Never read for correctness — with concurrent calls on one
+        #: provider instance the counts can interleave.
+        self._last_usage: dict[str, Any] = {}
 
     @property
     def name(self) -> str:
@@ -180,13 +195,14 @@ class Provider(ABC):
         last_raw = ""
         last_error = ""
         instruction = "\nReply with ONLY one JSON object and no other text."
+        budget = max_tokens + self.reasoning_overhead_tokens
 
         for attempt in range(1, attempts + 1):
             try:
                 last_raw = self.generate(
                     prompt if self.supports_json_mode else prompt + instruction,
                     image=image,
-                    max_tokens=max_tokens,
+                    max_tokens=budget,
                     # Nudge temperature up slightly on retry: a model that has
                     # produced unparseable output once at t=0.2 will usually
                     # reproduce it verbatim, so a literal retry is wasted.
@@ -195,6 +211,11 @@ class Provider(ABC):
                 )
             except ProviderError as exc:
                 last_error = str(exc)
+                # A budget exhausted by reasoning is the one failure a retry can
+                # actually fix, so give the next attempt materially more room
+                # rather than repeating an identical request.
+                if "budget ran out" in last_error:
+                    budget *= 2
                 continue
 
             parsed = extract_json(last_raw)
@@ -207,6 +228,7 @@ class Provider(ABC):
                     ok=True,
                     raw=last_raw,
                     had_image=image is not None,
+                    usage=dict(self._last_usage),
                 )
             last_error = "no JSON object in response"
 
