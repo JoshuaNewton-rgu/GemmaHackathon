@@ -16,7 +16,7 @@ import queue
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, UploadFile
+from fastapi import FastAPI, HTTPException, Response, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
@@ -282,6 +282,83 @@ async def api_stream(session_id: int) -> StreamingResponse:
 
 
 # ── history ─────────────────────────────────────────────────────────────────
+
+
+@app.get("/api/privacy")
+def api_privacy(profile: str = "default") -> dict[str, Any]:
+    """Everything the privacy screen states, generated from the live system.
+
+    Deliberately not static copy. Each line is derived from the configuration and
+    the database as they actually are, so the screen cannot promise a local-only
+    guarantee while a hosted backend is answering.
+    """
+    try:
+        provider = get_provider()
+        is_local, is_mock, model = provider.is_local, provider.name == "mock", f"{provider.model}"
+    except ProviderError:
+        is_local, is_mock, model = False, False, "none configured"
+
+    counts = _store.counts(profile=profile)
+
+    if is_mock:
+        lede = (
+            "The mock provider is configured, so no model is running and no frame is judged at all. "
+            "Nothing here is a real verdict."
+        )
+        frames = "Nothing is being captured or judged"
+    elif is_local:
+        lede = (
+            "Frames are judged by a model running on this machine and dropped the moment a verdict "
+            "exists. The verdicts are yours — export or delete them whenever."
+        )
+        frames = "Never written to disk, never sent anywhere"
+    else:
+        lede = (
+            "Frames are sent to a hosted model to be judged, then dropped — nothing is written to "
+            "disk. The verdicts are yours: export or delete them whenever."
+        )
+        frames = f"Never written to disk. Sent to {model} to be judged, then dropped"
+
+    return {
+        "lede": lede,
+        "frames": frames,
+        "database": f"{settings.db_path.name} — {counts['verdicts']} frame verdicts, "
+        f"{counts['snapshots']} note snapshots, in your own folder",
+        "network": (
+            "Open weights, no account, works offline"
+            if is_local
+            else "A hosted API is answering — this needs a connection"
+        ),
+        "network_badge": "none" if is_local else ("unused" if is_mock else "in use"),
+        "local_inference": is_local,
+        "mock": is_mock,
+        "counts": counts,
+        "recent_verdicts": _store.recent_verdicts(profile=profile, limit=3),
+    }
+
+
+@app.get("/api/export")
+def api_export(profile: str = "default") -> Response:
+    """Download everything held about this student as one JSON file."""
+    payload = _store.export_all(profile=profile)
+    body = json.dumps(payload, indent=2, ensure_ascii=False)
+    return Response(
+        content=body,
+        media_type="application/json",
+        headers={"Content-Disposition": 'attachment; filename="heid-doon-export.json"'},
+    )
+
+
+@app.post("/api/data/delete")
+def api_delete_everything(profile: str = "default") -> dict[str, Any]:
+    """Erase every session, verdict, snapshot and the learner model."""
+    removed = _store.delete_all(profile=profile)
+    # Drop in-memory sessions too, or a live one would keep writing to a store the
+    # student just emptied.
+    for session_id in list(_sessions):
+        _sessions.pop(session_id, None)
+        _streams.pop(session_id, None)
+    return {"deleted": removed}
 
 
 @app.get("/api/history")

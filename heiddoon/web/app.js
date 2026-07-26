@@ -1,4 +1,5 @@
 /* Heid Doon — front end.
+
    Holds no product logic. Every verdict, diff, grade and receipt comes from the
    server, which runs the same Session object the local watcher runs, so the UI
    cannot show something the event log does not contain. */
@@ -10,7 +11,11 @@ const state = {
   events: [],
   stream: null,
   webcamStream: null,
-  busy: false,
+  signals: { screen: true, camera: true, diff: true, idle: false },
+  tone: "warm",
+  breakTimer: null,
+  breakEndsAt: null,
+  breakTotal: 0,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -20,9 +25,20 @@ const el = (tag, cls, text) => {
   if (text !== undefined) node.textContent = text;
   return node;
 };
+const icon = (name, cls = "ic") => {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("class", cls);
+  const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+  use.setAttribute("href", `#${name}`);
+  svg.appendChild(use);
+  return svg;
+};
+const clockOf = (seconds) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
 
-function toast(message, isError = false) {
-  const node = el("div", `toast${isError ? " err" : ""}`, message);
+function snack(message, isError = false) {
+  const node = el("div", `snackbar${isError ? " err" : ""}`);
+  node.appendChild(icon(isError ? "i-alert" : "i-check", "ic sm"));
+  node.appendChild(el("span", null, message));
   document.body.appendChild(node);
   setTimeout(() => node.remove(), isError ? 7000 : 3500);
 }
@@ -40,34 +56,47 @@ async function api(path, options = {}) {
   return response.json();
 }
 
-/* Long model calls are the normal case, not the exception — a local vision call
-   can take over a minute. So every action that waits shows it, and blocks a
-   second click rather than queueing an identical request. */
+/* Long model calls are the normal case here, not the exception — a vision call
+   takes many seconds. So anything that waits says so, and blocks a second click
+   rather than firing an identical request. */
 function withBusy(button, label) {
   const original = button ? button.textContent : null;
-  state.busy = true;
-  $("pulse").classList.add("busy");
-  $("watcher-label").textContent = label;
-  if (button) { button.disabled = true; button.textContent = "…"; }
+  $("status-chip").classList.add("busy");
+  $("status-text").textContent = label;
+  if (button) { button.disabled = true; button.dataset.wasText = original; button.textContent = "Working…"; }
   return () => {
-    state.busy = false;
-    $("pulse").classList.remove("busy");
-    $("watcher-label").textContent = "watching";
-    if (button) { button.disabled = false; button.textContent = original; }
+    $("status-chip").classList.remove("busy");
+    $("status-text").textContent = state.sessionId ? "watching" : "idle";
+    if (button) { button.disabled = false; button.textContent = button.dataset.wasText || original; }
   };
 }
 
 /* ── navigation ─────────────────────────────────────────────────────────── */
 
+const TITLES = {
+  contract: "New session",
+  watch: "Watching",
+  receipt: "Receipt",
+  history: "History",
+  privacy: "Privacy",
+};
+
 function show(name) {
+  if (!TITLES[name]) name = "contract";
   document.querySelectorAll(".screen").forEach((node) => node.classList.remove("active"));
   $(`scr-${name}`).classList.add("active");
-  document.querySelectorAll(".nav-btn").forEach((node) =>
+  document.querySelectorAll(".rail-btn").forEach((node) =>
     node.classList.toggle("active", node.dataset.screen === name));
+  $("bar-title").textContent = TITLES[name];
+  // Reflect the screen in the URL so a screen can be linked or bookmarked — and
+  // so a demo can open straight onto the one it needs.
+  if (window.location.hash.slice(1) !== name) window.history.replaceState(null, "", `#${name}`);
   if (name === "history") loadHistory();
+  if (name === "privacy") loadPrivacy();
 }
-document.querySelectorAll(".nav-btn").forEach((node) =>
+document.querySelectorAll(".rail-btn").forEach((node) =>
   node.addEventListener("click", () => show(node.dataset.screen)));
+window.addEventListener("hashchange", () => show(window.location.hash.slice(1)));
 
 /* ── status: the header must describe the real configuration ────────────── */
 
@@ -75,28 +104,57 @@ async function loadStatus() {
   try {
     const status = await api("/api/status");
     const badge = $("model-badge");
-    $("model-text").textContent = status.provider_ready ? status.provider : "model unavailable";
+    badge.textContent = status.provider_ready ? status.provider : "model unavailable";
     badge.classList.toggle("down", !status.provider_ready);
     badge.classList.toggle("mock", !!status.mock);
-    if (status.mock) $("model-text").textContent = "MOCK — no model is running";
-    $("privacy-text").textContent = status.privacy_line;
-    $("privacy-strip").classList.toggle("hosted", !status.local_inference);
-    if (!status.provider_ready) toast(status.provider, true);
-  } catch (error) {
-    $("model-text").textContent = "server unreachable";
+    if (status.mock) badge.textContent = "MOCK — no model running";
+    $("bar-note").textContent = status.local_inference ? "on this machine" : "hosted";
+    $("sig-screen-desc").textContent = `Judged every ${status.cadence_s} seconds`;
+    if (!status.provider_ready) snack(status.provider, true);
+  } catch {
+    $("model-badge").textContent = "server unreachable";
     $("model-badge").classList.add("down");
   }
 }
 
-/* ── contract ───────────────────────────────────────────────────────────── */
+/* ── contract (3a) ──────────────────────────────────────────────────────── */
 
-const EXAMPLE = `I'm revising thermodynamics chapter 4 (entropy) until 12:30. Exam Friday — no all-nighter this time. Lecture videos and PDFs about thermodynamics are fine, music is fine, my study group chat is fine when we're discussing the problem set. No social media, no entertainment videos. Track notes_thermo.md. Camera presence on. Kind but sharp.`;
+const EXAMPLE = `Two hours on thermodynamics chapter 4 — entropy. Lecture videos and PDFs about thermodynamics are fine, music is fine, and my study group chat is fine when we're actually discussing the problem set. No social media, no entertainment videos. I'm writing into notes_thermo.md. This is the chapter I keep dodging and the exam is Thursday.`;
 
-$("btn-example").addEventListener("click", () => { $("contract-text").value = EXAMPLE; });
+$("btn-example").addEventListener("click", () => {
+  $("contract-text").value = EXAMPLE;
+  updateCount();
+});
+
+function updateCount() {
+  const field = $("contract-text");
+  $("char-count").textContent = `${field.value.length}/${field.maxLength}`;
+}
+$("contract-text").addEventListener("input", updateCount);
+updateCount();
+
+$("signals").addEventListener("click", (event) => {
+  const button = event.target.closest(".signal");
+  if (!button) return;
+  const name = button.dataset.signal;
+  state.signals[name] = !state.signals[name];
+  button.classList.toggle("on", state.signals[name]);
+});
+
+$("c-tone").addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-tone]");
+  if (!button) return;
+  state.tone = button.dataset.tone;
+  paintTone();
+});
+function paintTone() {
+  document.querySelectorAll("#c-tone button").forEach((node) =>
+    node.classList.toggle("on", node.dataset.tone === state.tone));
+}
 
 $("btn-compile").addEventListener("click", async (event) => {
   const text = $("contract-text").value.trim();
-  if (!text) { toast("Write your rules first.", true); return; }
+  if (!text) { snack("Write your rules first.", true); return; }
   const done = withBusy(event.target, "compiling");
   try {
     const { contract, repairs } = await api("/api/contract/compile", {
@@ -105,50 +163,76 @@ $("btn-compile").addEventListener("click", async (event) => {
       body: JSON.stringify({ text }),
     });
     state.contract = contract;
-    renderContract(contract);
-    if (repairs && repairs.length) toast(`Compiled, with ${repairs.length} field(s) repaired.`);
+    renderCompiled(contract);
+    if (repairs && repairs.length) snack(`Compiled, with ${repairs.length} field(s) repaired.`);
   } catch (error) {
-    toast(`Could not compile: ${error.message}`, true);
+    snack(`Could not compile: ${error.message}`, true);
   } finally { done(); }
 });
 
-function renderContract(contract) {
-  $("c-task").textContent = contract.task || "(none)";
-  $("c-why").textContent = contract.why || "(no reason given — nudges will be plainer without one)";
-  const fill = (id, items) => {
+function renderCompiled(contract) {
+  $("compiled-empty").classList.add("hidden");
+  $("compiled-body").classList.remove("hidden");
+  $("btn-start").classList.remove("hidden");
+  $("compiled-state").textContent = "editable";
+
+  $("c-task").textContent = contract.task || "—";
+  $("c-why").textContent = contract.why ? `“${contract.why}”` : "— (nudges will be plainer without one)";
+  $("c-artifacts").textContent = (contract.artifacts || []).join(", ") || "none named";
+  $("c-ends").textContent = contract.ends || "when you say so";
+
+  const fill = (id, items, cls) => {
     const host = $(id);
     host.innerHTML = "";
-    (items && items.length ? items : ["—"]).forEach((item) => host.appendChild(el("span", "chip", item)));
+    if (!items || !items.length) { host.appendChild(el("span", "chip neutral", "none")); return; }
+    items.forEach((item) => host.appendChild(el("span", `chip ${cls}`, item)));
   };
-  fill("c-allowed", contract.allowed);
-  fill("c-blocked", contract.blocked);
-  fill("c-signals", contract.signals);
-  $("contract-preview").classList.remove("hidden");
-}
+  fill("c-allowed", contract.allowed, "allow");
+  fill("c-blocked", contract.blocked, "block");
 
-$("btn-edit").addEventListener("click", () => $("contract-preview").classList.add("hidden"));
+  // The compiler reads a tone out of the student's own words; reflect it in the
+  // segmented control rather than overriding what they wrote.
+  const tone = (contract.tone || "").toLowerCase();
+  state.tone = tone.includes("blunt") || tone.includes("sharp") ? "blunt"
+    : tone.includes("plain") || tone.includes("dry") ? "plain" : "warm";
+  paintTone();
+
+  // Signals the contract asked for win over the toggles' defaults.
+  if (contract.signals && contract.signals.length) {
+    Object.keys(state.signals).forEach((name) => { state.signals[name] = contract.signals.includes(name); });
+    document.querySelectorAll(".signal").forEach((node) =>
+      node.classList.toggle("on", !!state.signals[node.dataset.signal]));
+  }
+  if (contract.artifacts && contract.artifacts.length) {
+    $("sig-diff-desc").textContent = `${contract.artifacts.join(", ")} · read for progress, not content`;
+  }
+}
 
 $("btn-start").addEventListener("click", async (event) => {
   const done = withBusy(event.target, "starting");
   try {
+    const contract = {
+      ...state.contract,
+      signals: Object.keys(state.signals).filter((name) => state.signals[name]),
+      tone: state.tone,
+    };
     const data = await api("/api/session", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ contract: state.contract }),
+      body: JSON.stringify({ contract }),
     });
     state.sessionId = data.session_id;
     state.startedAt = Date.now();
     state.events = [];
-    $("session-id").textContent = `#${data.session_id}`;
-    $("session-task").textContent = data.contract.task;
-    $("nav-session").disabled = false;
+    $("nav-watch").disabled = false;
     $("nav-receipt").disabled = false;
-    renderArtifactButtons(data.contract.artifacts || []);
+    renderArtifactButton(data.contract.artifacts || []);
     subscribe(data.session_id);
     startClock();
-    show("session");
+    show("watch");
+    $("status-text").textContent = "watching";
   } catch (error) {
-    toast(`Could not start: ${error.message}`, true);
+    snack(`Could not start: ${error.message}`, true);
   } finally { done(); }
 });
 
@@ -158,11 +242,10 @@ function startClock() {
   const tick = () => {
     if (!state.startedAt) return;
     const seconds = Math.floor((Date.now() - state.startedAt) / 1000);
-    const minutes = Math.floor(seconds / 60);
-    $("clock").textContent = `${minutes}:${String(seconds % 60).padStart(2, "0")}`;
-    // A 50-minute session fills the ring; longer just stays full.
+    $("clock").textContent = clockOf(seconds);
+    // A 50-minute session fills the ring; beyond that it simply stays full.
     const fraction = Math.min(1, seconds / (50 * 60));
-    $("ring-fg").setAttribute("stroke-dashoffset", String(490 * (1 - fraction)));
+    $("ring-fg").setAttribute("stroke-dashoffset", String(503 * (1 - fraction)));
   };
   tick();
   setInterval(tick, 1000);
@@ -177,6 +260,7 @@ function subscribe(sessionId) {
     const event = JSON.parse(message.data);
     state.events.push(event);
     addFeedRow(event);
+    $("verdict-count").textContent = `${state.events.length} recorded`;
   };
 }
 
@@ -184,30 +268,33 @@ function addFeedRow(event) {
   const feed = $("feed");
   feed.querySelector(".feed-empty")?.remove();
 
+  const detail = event.detail || {};
   let kind = "work";
-  let icon = "◆";
-  if (event.on_task === true) { kind = "ok"; icon = "✓"; }
-  else if (event.on_task === false) { kind = "bad"; icon = "!"; }
+  let name = "i-doc";
+  if (event.on_task === true) { kind = "ok"; name = "i-check"; }
+  else if (event.on_task === false) { kind = "bad"; name = event.kind === "camera" ? "i-camera" : "i-alert"; }
 
   const row = el("div", `verdict ${kind}`);
-  row.appendChild(el("div", "ico", icon));
+  const wrap = el("span", "ic-wrap");
+  wrap.appendChild(icon(name, "ic sm"));
+  row.appendChild(wrap);
 
-  const body = el("div", "body");
-  const detail = event.detail || {};
+  const txt = el("span", "txt");
   if (event.kind === "diff") {
-    body.appendChild(el("div", "what", `${event.seen} — ${detail.verdict} (${detail.delta_words >= 0 ? "+" : ""}${detail.delta_words} words)`));
-    body.appendChild(el("div", "why", detail.quality_note || detail.summary || ""));
+    const delta = detail.delta_words >= 0 ? `+${detail.delta_words}` : `${detail.delta_words}`;
+    txt.appendChild(el("span", "what", `${event.seen} — ${detail.verdict} (${delta} words)`));
+    txt.appendChild(el("span", "why", detail.quality_note || detail.summary || ""));
   } else if (event.kind === "quiz") {
-    body.appendChild(el("div", "what", detail.pass ? "Break earned" : "Break not earned"));
-    body.appendChild(el("div", "why", detail.feedback || ""));
+    txt.appendChild(el("span", "what", detail.pass ? "Break earned" : "Break not earned"));
+    txt.appendChild(el("span", "why", detail.feedback || ""));
   } else {
-    body.appendChild(el("div", "what", event.seen || event.kind));
-    body.appendChild(el("div", "why", detail.nudge || detail.reason || ""));
+    txt.appendChild(el("span", "what", event.seen || event.kind));
+    txt.appendChild(el("span", "why", detail.nudge || detail.reason || ""));
   }
-  row.appendChild(body);
+  row.appendChild(txt);
 
-  const meta = el("div", "meta");
-  meta.appendChild(el("div", "time", new Date(event.at * 1000).toLocaleTimeString()));
+  const meta = el("span", "meta");
+  meta.appendChild(el("span", null, new Date(event.at * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })));
   if (detail.latency_s) meta.appendChild(el("div", "lat", `${detail.latency_s}s`));
   if (detail.confidence === "low") meta.appendChild(el("div", "lat", "low conf."));
   row.appendChild(meta);
@@ -220,13 +307,14 @@ function addFeedRow(event) {
 /* ── frames ─────────────────────────────────────────────────────────────── */
 
 async function judgeBlob(blob, kind, button) {
+  if (!state.sessionId) { snack("Start a session first.", true); return; }
   const done = withBusy(button, kind === "camera" ? "reading the room" : "reading the screen");
   try {
     const form = new FormData();
     form.append("file", blob, "frame.png");
     await api(`/api/session/${state.sessionId}/frame?kind=${kind}`, { method: "POST", body: form });
   } catch (error) {
-    toast(`Could not judge that frame: ${error.message}`, true);
+    snack(`Could not judge that frame: ${error.message}`, true);
   } finally { done(); }
 }
 
@@ -243,46 +331,107 @@ $("frame-file").addEventListener("change", (event) => {
     if (name === "drop" && event.dataTransfer.files[0]) judgeBlob(event.dataTransfer.files[0], "screen", null);
   }));
 
-$("btn-webcam").addEventListener("click", async () => {
-  try {
-    state.webcamStream = await navigator.mediaDevices.getUserMedia({ video: true });
-    const video = $("webcam");
-    video.srcObject = state.webcamStream;
-    video.classList.remove("hidden");
-    $("btn-snap").disabled = false;
-  } catch (error) {
-    toast(`No camera: ${error.message}`, true);
+/* Grab a still from a live MediaStream. Shared by the screen and webcam paths:
+   both need a frame from a stream, and neither should hold the device open once
+   it has one. */
+async function grabStill(stream) {
+  const video = document.createElement("video");
+  video.srcObject = stream;
+  video.muted = true;
+  await video.play();
+  // Wait for real pixels — a video that has started can still report 0×0 for a
+  // frame or two, and a zero-size canvas produces a blank image the model would
+  // dutifully describe as an empty screen.
+  for (let attempt = 0; attempt < 40 && !video.videoWidth; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
   }
-});
+  if (!video.videoWidth) throw new Error("the stream produced no frames");
 
-$("btn-snap").addEventListener("click", async (event) => {
-  const video = $("webcam");
   const canvas = document.createElement("canvas");
   canvas.width = video.videoWidth;
   canvas.height = video.videoHeight;
   canvas.getContext("2d").drawImage(video, 0, 0);
-  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.85));
-  await judgeBlob(blob, "camera", event.target);
+  video.pause();
+  video.srcObject = null;
+  return new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.85));
+}
+
+/* Capture the student's actual screen from the browser — the closest the web app
+   gets to what the local watcher does. The stream is stopped in a `finally` the
+   moment the frame exists, so the share indicator goes off straight away: this is
+   one glance, not a session of watching. */
+$("btn-screenshot").addEventListener("click", async (event) => {
+  if (!state.sessionId) { snack("Start a session first.", true); return; }
+  if (!navigator.mediaDevices?.getDisplayMedia) {
+    snack("This browser cannot capture the screen — drop an image instead.", true);
+    return;
+  }
+
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getDisplayMedia({
+      video: { displaySurface: "monitor" },
+      audio: false,
+    });
+  } catch (error) {
+    // Dismissing the picker is a normal choice, not an error worth shouting about.
+    if (error.name !== "NotAllowedError") snack(`Could not capture: ${error.message}`, true);
+    return;
+  }
+
+  const done = withBusy(event.target, "reading your screen");
+  try {
+    const blob = await grabStill(stream);
+    const form = new FormData();
+    form.append("file", blob, "screen.jpg");
+    await api(`/api/session/${state.sessionId}/frame?kind=screen`, { method: "POST", body: form });
+  } catch (error) {
+    snack(`Could not judge that frame: ${error.message}`, true);
+  } finally {
+    stream.getTracks().forEach((track) => track.stop());
+    done();
+  }
+});
+
+$("btn-webcam").addEventListener("click", async () => {
+  try {
+    state.webcamStream = await navigator.mediaDevices.getUserMedia({ video: true });
+    $("webcam").srcObject = state.webcamStream;
+    $("webcam").classList.remove("hidden");
+    $("btn-snap").classList.remove("hidden");
+    $("btn-snap").disabled = false;
+  } catch (error) {
+    snack(`No camera: ${error.message}`, true);
+  }
+});
+
+$("btn-snap").addEventListener("click", async (event) => {
+  if (!state.webcamStream) { snack("Turn the webcam on first.", true); return; }
+  try {
+    await judgeBlob(await grabStill(state.webcamStream), "camera", event.target);
+  } catch (error) {
+    snack(`Could not take that frame: ${error.message}`, true);
+  }
 });
 
 /* ── work-diff ──────────────────────────────────────────────────────────── */
 
-function renderArtifactButtons(artifacts) {
+function renderArtifactButton(artifacts) {
   const host = $("artifact-actions");
   host.innerHTML = "";
   if (!artifacts.length) {
-    host.appendChild(el("div", "note", "This contract names no file to track — paste two versions below instead."));
+    host.appendChild(el("span", "hint", "This contract names no file — paste two versions below instead."));
     return;
   }
-  const button = el("button", "btn btn-primary btn-sm", `Check ${artifacts.join(", ")} on disk`);
+  const button = el("button", "btn btn-tonal sm", `Check ${artifacts.join(", ")} on disk`);
   button.addEventListener("click", async () => {
     const done = withBusy(button, "reading your file");
     try {
       const { diffs } = await api(`/api/session/${state.sessionId}/artifact-check`, { method: "POST" });
-      const unseen = Object.entries(diffs).filter(([, value]) => value === null).map(([key]) => key);
-      if (unseen.length) toast(`Baseline recorded for ${unseen.join(", ")} — check again after some writing.`);
+      const baselined = Object.entries(diffs).filter(([, value]) => value === null).map(([key]) => key);
+      if (baselined.length) snack(`Baseline recorded for ${baselined.join(", ")} — check again after writing.`);
     } catch (error) {
-      toast(`Could not check the file: ${error.message}`, true);
+      snack(`Could not check the file: ${error.message}`, true);
     } finally { done(); }
   });
   host.appendChild(button);
@@ -291,7 +440,7 @@ function renderArtifactButtons(artifacts) {
 $("btn-diff").addEventListener("click", async (event) => {
   const before = $("diff-before").value;
   const after = $("diff-after").value;
-  if (!before.trim() && !after.trim()) { toast("Paste two versions of your notes.", true); return; }
+  if (!before.trim() && !after.trim()) { snack("Paste two versions of your page.", true); return; }
   const done = withBusy(event.target, "reading your work");
   try {
     await api(`/api/session/${state.sessionId}/diff`, {
@@ -300,11 +449,11 @@ $("btn-diff").addEventListener("click", async (event) => {
       body: JSON.stringify({ before, after, minutes: 20 }),
     });
   } catch (error) {
-    toast(`Could not judge that delta: ${error.message}`, true);
+    snack(`Could not judge that delta: ${error.message}`, true);
   } finally { done(); }
 });
 
-/* ── nudge + bouncer ────────────────────────────────────────────────────── */
+/* ── nudge, bouncer, break (3b) ─────────────────────────────────────────── */
 
 function showNudge(line, seen) {
   $("nudge-line").textContent = line;
@@ -320,12 +469,13 @@ $("btn-break").addEventListener("click", askForBreak);
 $("btn-close-bouncer").addEventListener("click", () => $("ov-bouncer").classList.remove("open"));
 
 async function askForBreak() {
-  const notes = $("diff-after").value.trim() || null;
+  if (!state.sessionId) { snack("Start a session first.", true); return; }
   $("bouncer-question").textContent = "…";
-  $("grant-msg").classList.add("hidden");
+  $("bouncer-result").classList.add("hidden");
   $("bouncer-answer").value = "";
   $("ov-bouncer").classList.add("open");
   try {
+    const notes = $("diff-after").value.trim() || null;
     const { question } = await api(`/api/session/${state.sessionId}/break`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -334,31 +484,63 @@ async function askForBreak() {
     $("bouncer-question").textContent = question;
   } catch (error) {
     $("bouncer-question").textContent = "Could not think of a question just now.";
-    toast(error.message, true);
+    snack(error.message, true);
   }
 }
 
 $("btn-answer").addEventListener("click", async (event) => {
-  const answer = $("bouncer-answer").value;
   const done = withBusy(event.target, "marking");
   try {
     const grade = await api(`/api/session/${state.sessionId}/break/answer`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ answer }),
+      body: JSON.stringify({ answer: $("bouncer-answer").value }),
     });
-    const message = $("grant-msg");
-    message.textContent = grade.feedback;
-    message.className = `grant ${grade.pass ? "pass" : "fail"}`;
-    if (grade.pass) setTimeout(() => $("ov-bouncer").classList.remove("open"), 2600);
+    const box = $("bouncer-result");
+    box.className = `result ${grade.pass ? "pass" : "fail"}`;
+    $("bouncer-result-title").textContent = grade.pass ? "Passed — off you go" : "Not quite yet";
+    $("bouncer-result-detail").textContent = grade.feedback || "";
+    if (grade.pass) setTimeout(() => { $("ov-bouncer").classList.remove("open"); startBreak(10); }, 1600);
   } catch (error) {
-    toast(error.message, true);
+    snack(error.message, true);
   } finally { done(); }
 });
 
-/* ── receipt ────────────────────────────────────────────────────────────── */
+function startBreak(minutes) {
+  state.breakTotal = minutes;
+  state.breakEndsAt = Date.now() + minutes * 60000;
+  $("break-of").textContent = `of ${minutes} minutes`;
+  $("ov-break").classList.add("open");
+  const back = new Date(state.breakEndsAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  $("break-line").textContent = `Go and look out a window. I'll come and get you at ${back}.`;
+  clearInterval(state.breakTimer);
+  state.breakTimer = setInterval(tickBreak, 250);
+  tickBreak();
+}
+
+function tickBreak() {
+  const remaining = Math.max(0, state.breakEndsAt - Date.now()) / 1000;
+  $("break-clock").textContent = clockOf(remaining);
+  $("break-track").style.width = `${(remaining / (state.breakTotal * 60)) * 100}%`;
+  if (remaining <= 0) endBreak();
+}
+
+function endBreak() {
+  clearInterval(state.breakTimer);
+  state.breakTimer = null;
+  $("ov-break").classList.remove("open");
+}
+$("btn-break-back").addEventListener("click", endBreak);
+$("btn-break-add").addEventListener("click", () => {
+  state.breakEndsAt += 3 * 60000;
+  state.breakTotal += 3;
+  $("break-of").textContent = `of ${state.breakTotal} minutes`;
+});
+
+/* ── receipt (3c) ───────────────────────────────────────────────────────── */
 
 $("btn-finish").addEventListener("click", async (event) => {
+  if (!state.sessionId) { snack("No session running.", true); return; }
   const done = withBusy(event.target, "writing your receipt");
   try {
     const { receipt } = await api(`/api/session/${state.sessionId}/finish`, { method: "POST" });
@@ -367,45 +549,131 @@ $("btn-finish").addEventListener("click", async (event) => {
     if (state.webcamStream) state.webcamStream.getTracks().forEach((track) => track.stop());
     show("receipt");
   } catch (error) {
-    toast(`Could not finish: ${error.message}`, true);
+    snack(`Could not finish: ${error.message}`, true);
   } finally { done(); }
 });
 
 function renderReceipt(receipt) {
-  const checks = state.events.filter((event) => event.on_task !== null && event.on_task !== undefined
-    && (event.kind === "screen" || event.kind === "camera"));
+  const checks = state.events.filter((event) => event.kind === "screen" || event.kind === "camera");
   const drifted = checks.filter((event) => event.on_task === false);
   const diffs = state.events.filter((event) => event.kind === "diff");
   const words = diffs.reduce((total, event) => total + (event.detail.delta_words || 0), 0);
+  const minutes = Math.floor((Date.now() - state.startedAt) / 60000);
 
   $("r-score").textContent = receipt.focus_score;
-  $("r-checks").textContent = checks.length;
-  $("r-drift").textContent = `${drifted.length} drifted`;
-  $("r-words").textContent = words >= 0 ? `+${words}` : String(words);
-  $("r-quality").textContent = diffs.length ? diffs[diffs.length - 1].detail.verdict : "not checked";
-  $("r-elapsed").textContent = Math.floor((Date.now() - state.startedAt) / 60000);
+  $("r-delta").textContent = words > 0 ? `+${words} words` : "";
   $("r-autopsy").textContent = receipt.autopsy;
-  $("r-tomorrow").innerHTML = `<b>Tomorrow:</b> ${receipt.tomorrow}`;
-  $("r-learner").textContent = JSON.stringify(receipt.learner_model, null, 2);
+  $("r-tomorrow").textContent = receipt.tomorrow || "—";
 
+  const started = new Date(state.startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const ended = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  $("r-span").textContent = `${started} → ${ended} · ${minutes} min · no frames stored`;
+  $("lg-on").textContent = `on task ${checks.length - drifted.length}`;
+  $("lg-drift").textContent = `drift ${drifted.length}`;
+  $("lg-work").textContent = `work checked ${diffs.length}`;
+
+  // The session bar. Each event is a segment; drift and idle are hatched rather
+  // than coloured, per the design — a gap reads as absence, not as a red mark.
   const timeline = $("r-timeline");
   timeline.innerHTML = "";
-  state.events.forEach((event) => {
-    const segment = el("div", "seg");
-    if (event.kind === "diff") segment.classList.add("work");
-    else if (event.on_task === false) segment.classList.add("drift");
-    else segment.classList.add("focus");
-    segment.title = `${event.kind}: ${event.seen || ""}`;
-    timeline.appendChild(segment);
+  if (!state.events.length) {
+    timeline.appendChild(el("div", "seg drift", ""));
+  } else {
+    state.events.forEach((event) => {
+      const segment = el("span", "seg");
+      segment.style.flex = "1";
+      if (event.kind === "diff") segment.classList.add("work");
+      else if (event.kind === "idle") segment.classList.add("idle");
+      else if (event.on_task === false) segment.classList.add("drift");
+      segment.title = `${event.kind}: ${event.seen || ""}`;
+      timeline.appendChild(segment);
+    });
+  }
+
+  // Drift autopsy: the actual drift events, then the model's pattern read.
+  const list = $("r-drift-list");
+  list.innerHTML = "";
+  if (!drifted.length) {
+    const row = el("div", "ev");
+    row.appendChild(el("span", "t", "—"));
+    row.appendChild(el("span", "pip"));
+    const txt = el("div");
+    txt.appendChild(el("div", "what", "No drift recorded this session."));
+    txt.appendChild(el("div", "why", "Whatever you did to set this one up, do it again."));
+    row.appendChild(txt);
+    list.appendChild(row);
+  } else {
+    drifted.forEach((event) => {
+      const row = el("div", "ev");
+      row.appendChild(el("span", "t", new Date(event.at * 1000)
+        .toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })));
+      row.appendChild(el("span", "pip"));
+      const txt = el("div");
+      txt.style.flex = "1";
+      txt.appendChild(el("div", "what", event.seen || "drift"));
+      txt.appendChild(el("div", "why", (event.detail || {}).nudge || (event.detail || {}).reason || ""));
+      row.appendChild(txt);
+      list.appendChild(row);
+    });
+  }
+  const insight = el("div", "insight");
+  insight.appendChild(icon("i-insights", "ic"));
+  insight.appendChild(el("div", "txt", receipt.autopsy || "Too short a log to read a pattern yet."));
+  list.appendChild(insight);
+
+  renderLearner("r-learner", receipt.learner_model);
+  loadStreak();
+}
+
+function renderLearner(hostId, learner) {
+  const host = $(hostId);
+  host.innerHTML = "";
+  const rows = [
+    ["weak", (learner.weak_topics || []).join(", ")],
+    ["strong", (learner.strong_topics || []).join(", ")],
+    ["drift trigger", (learner.drift_patterns || []).join(" · ")],
+    ["focus streak", learner.avg_focus_streak_min ? `${learner.avg_focus_streak_min} min avg` : ""],
+    ["best nudge", learner.best_nudge_style || ""],
+    ["next", learner.next_difficulty || ""],
+  ];
+  rows.forEach(([key, value]) => {
+    const row = el("div");
+    row.appendChild(el("span", "k", `${key} `));
+    row.appendChild(document.createTextNode(value || "not yet known"));
+    host.appendChild(row);
   });
 }
 
-$("btn-again").addEventListener("click", () => {
-  state.sessionId = null;
-  state.events = [];
-  $("feed").innerHTML = '<div class="feed-empty">Nothing yet.</div>';
+/* The streak squares are drawn from real sessions, not decoration: a missed day
+   is hatched rather than absent, because the design makes the point that the
+   streak survives a lapse. */
+async function loadStreak() {
+  try {
+    const { sessions } = await api("/api/history");
+    const days = new Set(sessions.map((s) => new Date(s.started_at * 1000).toDateString()));
+    const host = $("r-streak");
+    host.innerHTML = "";
+    let active = 0;
+    for (let back = 5; back >= 0; back -= 1) {
+      const day = new Date(Date.now() - back * 86400000).toDateString();
+      const hit = days.has(day);
+      if (hit) active += 1;
+      host.appendChild(el("span", `day${hit ? "" : " miss"}`));
+    }
+    $("r-streak-label").textContent = `Sessions · ${sessions.length} total`;
+    $("r-streak-note").textContent = active >= 6
+      ? "Six days running. Whatever you are doing, keep doing it."
+      : "Hatched days are ones you missed — the streak carries on regardless. A lapse is not a relapse.";
+  } catch { /* the receipt is still valid without the streak */ }
+}
+
+$("btn-accept-tomorrow").addEventListener("click", () => {
+  $("contract-text").value = $("r-tomorrow").textContent;
+  updateCount();
+  snack("Drafted into a new contract — edit it, then compile.");
   show("contract");
 });
+$("btn-edit-rules").addEventListener("click", () => show("contract"));
 
 /* ── history ────────────────────────────────────────────────────────────── */
 
@@ -414,25 +682,90 @@ async function loadHistory() {
     const data = await api("/api/history");
     const host = $("h-sessions");
     host.innerHTML = "";
-    if (!data.sessions.length) host.appendChild(el("div", "feed-empty", "No sessions recorded yet."));
+    if (!data.sessions.length) {
+      host.appendChild(el("div", "feed-empty", "No sessions recorded yet."));
+    }
     data.sessions.forEach((session) => {
-      const row = el("div", "verdict work");
-      row.appendChild(el("div", "ico", "#"));
-      const body = el("div", "body");
-      body.appendChild(el("div", "what", `Session ${session.id}`));
-      body.appendChild(el("div", "why", session.ended_at
-        ? `focus ${session.focus_score ?? "–"}/100`
-        : "still open"));
-      row.appendChild(body);
-      const meta = el("div", "meta");
-      meta.appendChild(el("div", "time", new Date(session.started_at * 1000).toLocaleString()));
-      row.appendChild(meta);
+      const row = el("div", "session-row");
+      const pip = el("span", `score-pip${session.ended_at ? "" : " open"}`,
+        session.focus_score ?? "–");
+      row.appendChild(pip);
+      const txt = el("span", "txt");
+      txt.style.flex = "1";
+      txt.appendChild(el("div", "name", `Session ${session.id}`));
+      txt.appendChild(el("div", "desc", session.ended_at ? "finished" : "still open"));
+      row.appendChild(txt);
+      row.appendChild(el("span", "meta mono",
+        new Date(session.started_at * 1000).toLocaleString([], {
+          day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
+        })));
       host.appendChild(row);
     });
-    $("h-learner").textContent = JSON.stringify(data.learner_model, null, 2);
+    renderLearner("h-learner", data.learner_model);
   } catch (error) {
-    toast(error.message, true);
+    snack(error.message, true);
   }
 }
 
+/* ── privacy (3d) ───────────────────────────────────────────────────────── */
+
+async function loadPrivacy() {
+  try {
+    const data = await api("/api/privacy");
+    $("privacy-lede").textContent = data.lede;
+    $("privacy-frames").textContent = data.frames;
+    $("privacy-db").textContent = data.database;
+    $("privacy-network").textContent = data.network;
+    const badge = $("privacy-network-badge");
+    badge.textContent = data.network_badge;
+    badge.className = `badge ${data.local_inference ? "none" : "inuse"}`;
+
+    const log = $("privacy-log");
+    log.innerHTML = "";
+    if (!data.recent_verdicts.length) {
+      log.appendChild(el("span", "log-empty", "No verdicts recorded yet."));
+    }
+    data.recent_verdicts.forEach((verdict) => {
+      const row = el("div");
+      const when = new Date(verdict.at * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      row.appendChild(el("span", verdict.on_task ? "on" : "off",
+        `${when} ${verdict.on_task ? "on_task" : "off_task"}`));
+      row.appendChild(document.createTextNode(` · ${verdict.seen}`));
+      log.appendChild(row);
+    });
+  } catch (error) {
+    snack(error.message, true);
+  }
+}
+
+$("btn-export").addEventListener("click", () => {
+  // A plain navigation, so the browser's own download UI handles it.
+  window.location.href = "/api/export";
+});
+
+$("btn-delete").addEventListener("click", async (event) => {
+  const { counts } = await api("/api/privacy").catch(() => ({ counts: null }));
+  const summary = counts
+    ? `${counts.sessions} sessions, ${counts.events} verdicts and ${counts.snapshots} note snapshots`
+    : "everything";
+  if (!window.confirm(`Delete ${summary}? This cannot be undone.`)) return;
+
+  const done = withBusy(event.target, "deleting");
+  try {
+    const { deleted } = await api("/api/data/delete", { method: "POST" });
+    state.sessionId = null;
+    state.events = [];
+    if (state.stream) { state.stream.close(); state.stream = null; }
+    $("nav-watch").disabled = true;
+    $("nav-receipt").disabled = true;
+    $("feed").innerHTML = '<div class="feed-empty">Nothing yet.</div>';
+    snack(`Deleted ${deleted.sessions} sessions and ${deleted.events} verdicts. Gone for good.`);
+    loadPrivacy();
+  } catch (error) {
+    snack(error.message, true);
+  } finally { done(); }
+});
+
 loadStatus();
+paintTone();
+if (window.location.hash.length > 1) show(window.location.hash.slice(1));

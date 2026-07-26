@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics><meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Roboto:wght@400;500;700&family=Roboto+Mono:wght@400;500&family=Material+Symbols+Rounded:opsz,wght@24,400&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#E6EBE4;font-family:"IBM Plex Sans",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:#1c1a17}a:hover{color:#1D6A50}
+.dv-turn{padding:44px 48px 36px;border-bottom:1px solid rgba(0,0,0,.09);scroll-margin-top:16px}
+.dv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 6px}
+.dv-tid{font:600 10px "IBM Plex Mono",monospace;padding:3px 7px;background:#1c1a17;color:#f4f1ea;border-radius:4px;text-decoration:none}
+.dv-tname{font:600 13px/1.2 "IBM Plex Sans",sans-serif;color:#1c1a17}
+.dv-opts{display:flex;flex-wrap:wrap;gap:34px;align-items:flex-start}
+.dv-opt{flex:none;display:flex;flex-direction:column;gap:10px;scroll-margin-top:16px}
+.dv-oid{font:600 10.5px "IBM Plex Mono",monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1c1a17;border-radius:5px;text-decoration:none}
+.dv-olabel{display:flex;align-items:baseline;gap:9px;font:400 11.5px/1.3 "IBM Plex Sans",sans-serif;color:rgba(0,0,0,.55)}
+.dv-card{max-width:100%;background:#f4f1ea;border:1px solid rgba(0,0,0,.1);border-radius:10px;box-shadow:0 2px 10px rgba(28,26,23,.07);overflow:hidden}
+.dv-opt:target .dv-oid{background:#1D6A50;color:#f4f1ea}
+.dv-next{margin:26px 0 0;font:12px/1.6 "IBM Plex Sans",sans-serif;color:rgba(0,0,0,.5)}
+.cap{font:500 10px "IBM Plex Mono",monospace;letter-spacing:.08em;text-transform:uppercase;color:rgba(0,0,0,.42)}
+</style></helmet>
+
+<section class="dv-turn" id="t3" style="background:#F1F5EF">
+<div class="dv-thd"><a class="dv-tid" href="#t3">3</a><span class="dv-tname">Material 3 — the full-window screens</span></div>
+<p style="margin:0 0 22px;max-width:800px;font:400 13px/1.6 Roboto,system-ui,sans-serif;color:#414942">Full-window screens for the moments the HUD only hints at: authoring the contract, the scheduled checkpoint, the break in progress, the end-of-session receipt with autopsy and learner model, and the privacy sheet. Same tokens as <a class="dv-oid" href="#2a">2a</a> — nav rail on the left, top app bar, filled text fields, one FAB per screen.</p>
+<div class="dv-opts">
+
+<div class="dv-opt" id="3a">
+<div class="dv-olabel"><a class="dv-oid" href="#3a">3a</a>Contract authoring — natural language compiled into rules</div>
+<div class="dv-card" data-screen-label="3a Contract" style="width:820px;border-radius:20px;background:#F7FAF6;border-color:#C0C9C1;font-family:Roboto,system-ui,sans-serif">
+<div style="display:grid;grid-template-columns:80px 1fr">
+
+<div style="background:#EDF1EB;padding:14px 0 20px;display:flex;flex-direction:column;align-items:center;gap:6px;border-right:1px solid #DDE3DC">
+<div style="width:44px;height:44px;border-radius:100px;background:#1D6A50;color:#fff;display:flex;align-items:center;justify-content:center;font:500 15px Roboto,sans-serif;margin-bottom:12px">hd</div>
+<div style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 0"><span style="width:56px;height:32px;border-radius:100px;background:#A6F2CE;color:#00281A;display:flex;align-items:center;justify-content:center;font:400 22px/1 'Material Symbols Rounded'">draw</span><span style="font:500 12px Roboto,sans-serif;color:#191C1A">Contract</span></div>
+<div style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 0"><span style="width:56px;height:32px;display:flex;align-items:center;justify-content:center;color:#414942;font:400 22px/1 'Material Symbols Rounded'">visibility</span><span style="font:500 12px Roboto,sans-serif;color:#414942">Watch</span></div>
+<div style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 0"><span style="width:56px;height:32px;display:flex;align-items:center;justify-content:center;color:#414942;font:400 22px/1 'Material Symbols Rounded'">receipt_long</span><span style="font:500 12px Roboto,sans-serif;color:#414942">Receipts</span></div>
+<span style="flex:1"></span>
+<div style="display:flex;flex-direction:column;align-items:center;gap:4px"><span style="width:56px;height:32px;display:flex;align-items:center;justify-content:center;color:#414942;font:400 22px/1 'Material Symbols Rounded'">lock</span><span style="font:500 12px Roboto,sans-serif;color:#414942">Privacy</span></div>
+</div>
+
+<div>
+<div style="display:flex;align-items:center;gap:14px;padding:16px 24px 14px">
+<h2 style="margin:0;font:400 22px/1.3 Roboto,sans-serif;color:#191C1A">New session</h2>
+<span style="flex:1"></span>
+<span style="padding:6px 12px;border-radius:8px;background:#D3E8DC;color:#1A2C24;font:500 11.5px 'Roboto Mono',monospace">gemma 4 e4b · on this machine</span>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;padding:6px 24px 26px">
+
+<div>
+<div style="border-radius:12px 12px 0 0;background:#E6EBE4;border-bottom:2px solid #1D6A50;padding:10px 16px 12px">
+<div style="font:400 11px Roboto,sans-serif;color:#1D6A50;margin-bottom:5px">What is today for</div>
+<div style="font:400 14px/1.65 Roboto,sans-serif;color:#191C1A">Two hours on the Ch.4 problem set. Lecture slides, the textbook PDF and my notes file are fine. No football, no Discord. I'm writing into ch4-notes.md. This is the chapter I keep dodging and the exam is Thursday.</div>
+</div>
+<div style="display:flex;justify-content:space-between;padding:6px 16px 0;font:400 11px Roboto,sans-serif;color:#414942"><span>Plain words. It will quote you back.</span><span>247/600</span></div>
+
+<div style="margin-top:22px;font:500 12px 'Roboto Mono',monospace;letter-spacing:.06em;text-transform:uppercase;color:#414942">Signals</div>
+<div style="display:flex;flex-direction:column;gap:2px;margin-top:8px">
+<div style="display:flex;align-items:center;gap:14px;padding:10px 4px"><span style="color:#414942;font:400 22px/1 'Material Symbols Rounded'">desktop_windows</span><div style="flex:1"><div style="font:400 14px Roboto,sans-serif;color:#191C1A">Screen</div><div style="font:400 12px Roboto,sans-serif;color:#414942">Judged every 20 seconds</div></div><span style="width:52px;height:32px;border-radius:100px;background:#1D6A50;display:flex;align-items:center;justify-content:flex-end;padding:0 4px"><span style="width:24px;height:24px;border-radius:50%;background:#fff"></span></span></div>
+<div style="display:flex;align-items:center;gap:14px;padding:10px 4px"><span style="color:#414942;font:400 22px/1 'Material Symbols Rounded'">photo_camera</span><div style="flex:1"><div style="font:400 14px Roboto,sans-serif;color:#191C1A">Camera</div><div style="font:400 12px Roboto,sans-serif;color:#414942">Presence and phone in hand</div></div><span style="width:52px;height:32px;border-radius:100px;background:#1D6A50;display:flex;align-items:center;justify-content:flex-end;padding:0 4px"><span style="width:24px;height:24px;border-radius:50%;background:#fff"></span></span></div>
+<div style="display:flex;align-items:center;gap:14px;padding:10px 4px"><span style="color:#414942;font:400 22px/1 'Material Symbols Rounded'">description</span><div style="flex:1"><div style="font:400 14px Roboto,sans-serif;color:#191C1A">The page itself</div><div style="font:400 12px Roboto,sans-serif;color:#414942">ch4-notes.md · read for progress, not content</div></div><span style="width:52px;height:32px;border-radius:100px;background:#1D6A50;display:flex;align-items:center;justify-content:flex-end;padding:0 4px"><span style="width:24px;height:24px;border-radius:50%;background:#fff"></span></span></div>
+<div style="display:flex;align-items:center;gap:14px;padding:10px 4px"><span style="color:#71796F;font:400 22px/1 'Material Symbols Rounded'">bedtime</span><div style="flex:1"><div style="font:400 14px Roboto,sans-serif;color:#414942">Idle</div><div style="font:400 12px Roboto,sans-serif;color:#71796F">Nothing on screen changing, nothing typed</div></div><span style="width:52px;height:32px;border-radius:100px;background:#E0E5DE;border:2px solid #71796F;box-sizing:border-box;display:flex;align-items:center;padding:0 4px"><span style="width:16px;height:16px;border-radius:50%;background:#71796F"></span></span></div>
+</div>
+</div>
+
+<div style="border-radius:16px;background:#EDF1EB;padding:20px">
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px"><span style="color:#1D6A50;font:400 20px/1 'Material Symbols Rounded'">auto_awesome</span><span style="font:500 13px Roboto,sans-serif;color:#191C1A">Compiled contract</span><span style="flex:1"></span><span style="font:400 11px 'Roboto Mono',monospace;color:#6F7A72">editable</span></div>
+<div style="display:flex;flex-direction:column;gap:16px">
+<div><div style="font:400 11.5px 'Roboto Mono',monospace;color:#6F7A72;margin-bottom:5px">task</div><div style="font:400 15px Roboto,sans-serif;color:#191C1A">Ch.4 problem set — 2 h</div></div>
+<div><div style="font:400 11.5px 'Roboto Mono',monospace;color:#6F7A72;margin-bottom:7px">allowed</div><div style="display:flex;flex-wrap:wrap;gap:6px">
+<span style="padding:6px 11px;border-radius:8px;background:#A6F2CE;color:#00281A;font:500 12px 'Roboto Mono',monospace">lecture slides</span>
+<span style="padding:6px 11px;border-radius:8px;background:#A6F2CE;color:#00281A;font:500 12px 'Roboto Mono',monospace">textbook pdf</span>
+<span style="padding:6px 11px;border-radius:8px;background:#A6F2CE;color:#00281A;font:500 12px 'Roboto Mono',monospace">ch4-notes.md</span>
+<span style="padding:6px 11px;border-radius:8px;background:#A6F2CE;color:#00281A;font:500 12px 'Roboto Mono',monospace">youtube · lectures only</span>
+</div></div>
+<div><div style="font:400 11.5px 'Roboto Mono',monospace;color:#6F7A72;margin-bottom:7px">blocked</div><div style="display:flex;flex-wrap:wrap;gap:6px">
+<span style="padding:6px 11px;border-radius:8px;background:#F9DEDC;color:#410E0B;font:500 12px 'Roboto Mono',monospace">football</span>
+<span style="padding:6px 11px;border-radius:8px;background:#F9DEDC;color:#410E0B;font:500 12px 'Roboto Mono',monospace">discord</span>
+</div></div>
+<div><div style="font:400 11.5px 'Roboto Mono',monospace;color:#6F7A72;margin-bottom:5px">artifact</div><div style="font:400 13.5px 'Roboto Mono',monospace;color:#191C1A">ch4-notes.md</div></div>
+<div><div style="font:400 11.5px 'Roboto Mono',monospace;color:#6F7A72;margin-bottom:5px">why it matters</div><div style="font:400 15px/1.45 Roboto,sans-serif;color:#191C1A">“the chapter I keep dodging, and the exam is Thursday”</div></div>
+<div><div style="font:400 11.5px 'Roboto Mono',monospace;color:#6F7A72;margin-bottom:7px">tone of nudges</div><div style="display:flex;border:1px solid #71796F;border-radius:100px;overflow:hidden">
+<span style="flex:1;text-align:center;padding:8px 0;background:#A6F2CE;color:#00281A;font:500 12.5px Roboto,sans-serif">Plain</span>
+<span style="flex:1;text-align:center;padding:8px 0;border-left:1px solid #71796F;color:#414942;font:500 12.5px Roboto,sans-serif">Warm</span>
+<span style="flex:1;text-align:center;padding:8px 0;border-left:1px solid #71796F;color:#414942;font:500 12.5px Roboto,sans-serif">Blunt</span>
+</div></div>
+<div><div style="font:400 11.5px 'Roboto Mono',monospace;color:#6F7A72;margin-bottom:5px">ends</div><div style="font:400 15px Roboto,sans-serif;color:#191C1A">17:40, or when the set is done</div></div>
+</div>
+<button style="width:100%;margin-top:20px;border:0;border-radius:100px;padding:14px;background:#1D6A50;color:#fff;font:500 14px Roboto,sans-serif;cursor:pointer;white-space:nowrap;box-shadow:0 1px 2px rgba(0,0,0,.3)">Start watching</button>
+</div>
+
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="3b">
+<div class="dv-olabel"><a class="dv-oid" href="#3b">3b</a>Checkpoint and break — retrieval on schedule, break in progress</div>
+<div style="display:flex;flex-direction:column;gap:18px">
+<div class="dv-card" data-screen-label="3b Checkpoint" style="width:520px;border-radius:20px;background:#F7FAF6;border-color:#C0C9C1;padding:24px;font-family:Roboto,system-ui,sans-serif">
+<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+<span style="display:flex;align-items:center;gap:7px;padding:6px 12px;border-radius:8px;background:#C1E8FB;color:#0A4A5E;font:500 11.5px Roboto,sans-serif">Checkpoint · 45 min</span>
+<span style="flex:1"></span>
+<span style="font:400 11px 'Roboto Mono',monospace;color:#6F7A72">from ch4-notes.md, lines 40–68</span>
+</div>
+<h3 style="margin:0 0 6px;font:400 22px/1.32 Roboto,sans-serif;color:#191C1A;text-wrap:pretty">Before you carry on — say this back without looking</h3>
+<p style="margin:0 0 18px;font:400 15px/1.55 Roboto,sans-serif;color:#414942;text-wrap:pretty">You wrote that the amplitude peak shifts below ω₀ as damping rises. What happens to the phase at resonance, and why does that follow?</p>
+<div style="border-radius:12px 12px 0 0;background:#E6EBE4;border-bottom:2px solid #71796F;padding:12px 16px;min-height:78px;font:400 14px/1.6 Roboto,sans-serif;color:#6F7A72">Type or speak it</div>
+<div style="display:flex;align-items:center;gap:10px;margin-top:16px">
+<button style="border:0;width:48px;height:48px;border-radius:100px;background:#C1E8FB;color:#0A4A5E;font:400 22px/1 'Material Symbols Rounded';cursor:pointer">mic</button>
+<span style="flex:1;font:400 12px Roboto,sans-serif;color:#414942">20 seconds of speaking counts too</span>
+<button style="border:0;border-radius:100px;padding:11px 18px;background:transparent;color:#1D6A50;font:500 14px Roboto,sans-serif;cursor:pointer;white-space:nowrap">Skip, I'm mid-thought</button>
+<button style="border:0;border-radius:100px;padding:11px 22px;background:#1D6A50;color:#fff;font:500 14px Roboto,sans-serif;cursor:pointer;white-space:nowrap">Check</button>
+</div>
+<div style="margin-top:18px;border-radius:12px;background:#D3E8DC;padding:14px 16px;display:flex;gap:12px;align-items:flex-start">
+<span style="color:#0B2A1E;font:400 20px/1 'Material Symbols Rounded'">check_circle</span>
+<div><div style="font:500 13.5px Roboto,sans-serif;color:#0B2A1E;margin-bottom:3px">Passed — you had the phase lag right</div><div style="font:400 13px/1.5 Roboto,sans-serif;color:#1A2C24">You did not mention that it is exactly 90° at ω₀ regardless of damping. Worth a line in your notes.</div></div>
+</div>
+</div>
+
+<div class="dv-card" data-screen-label="3b Break" style="width:520px;border-radius:20px;background:#0F2A20;border-color:#0F2A20;padding:26px;font-family:Roboto,system-ui,sans-serif">
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+<span style="padding:6px 12px;border-radius:8px;background:#2B4F3F;color:#A6F2CE;font:500 11.5px Roboto,sans-serif">Break · earned</span>
+<span style="font:400 11px 'Roboto Mono',monospace;color:#8AA79A">watching paused · nothing judged</span>
+</div>
+<div style="display:flex;align-items:baseline;gap:12px">
+<span style="font:400 64px/1 Roboto,sans-serif;color:#E6F4EC">5:12</span>
+<span style="font:400 14px Roboto,sans-serif;color:#A6C9B6">of 8 minutes</span>
+</div>
+<div style="height:6px;border-radius:100px;background:#2B4F3F;margin:18px 0 16px;overflow:hidden"><span style="display:block;width:36%;height:100%;border-radius:100px;background:#A6F2CE"></span></div>
+<p style="margin:0 0 20px;font:400 15px/1.55 Roboto,sans-serif;color:#C9E4D7;text-wrap:pretty">Go and look out a window. I will bring you back at 15:48 with the phase-lag problem still open where you left it.</p>
+<div style="display:flex;gap:8px">
+<button style="border:0;border-radius:100px;padding:11px 20px;background:#A6F2CE;color:#00281A;font:500 14px Roboto,sans-serif;cursor:pointer;white-space:nowrap">Back early</button>
+<button style="border:1px solid #4A6B5C;border-radius:100px;padding:11px 20px;background:transparent;color:#A6F2CE;font:500 14px Roboto,sans-serif;cursor:pointer;white-space:nowrap">Add 3 minutes</button>
+</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="3c">
+<div class="dv-olabel"><a class="dv-oid" href="#3c">3c</a>Receipt — autopsy, learner model, tomorrow's contract</div>
+<div class="dv-card" data-screen-label="3c Receipt" style="width:700px;border-radius:20px;background:#F7FAF6;border-color:#C0C9C1;font-family:Roboto,system-ui,sans-serif">
+<div style="display:flex;align-items:center;gap:12px;padding:16px 24px;border-bottom:1px solid #DDE3DC">
+<span style="color:#414942;font:400 22px/1 'Material Symbols Rounded'">arrow_back</span>
+<h2 style="margin:0;font:400 22px/1.3 Roboto,sans-serif;color:#191C1A">Receipt · 26 July</h2>
+<span style="flex:1"></span>
+<span style="font:400 11.5px 'Roboto Mono',monospace;color:#6F7A72">2 h 04 m · no frames stored</span>
+</div>
+
+<div style="padding:24px">
+<div style="display:grid;grid-template-columns:1.15fr 1fr;gap:16px">
+<div style="border-radius:20px;background:#1D6A50;color:#fff;padding:22px">
+<div style="font:500 11.5px 'Roboto Mono',monospace;letter-spacing:.07em;text-transform:uppercase;color:#B9E8D2">Focus score</div>
+<div style="display:flex;align-items:baseline;gap:10px;margin-top:6px"><span style="font:400 60px/1 Roboto,sans-serif">78</span><span style="font:500 13px Roboto,sans-serif;color:#A6F2CE">+9</span></div>
+<p style="margin:14px 0 0;font:400 14px/1.5 Roboto,sans-serif;color:#DDF3E8;text-wrap:pretty">You did the chapter you had been dodging. Twice you left at the hard part, both times you came back inside four minutes.</p>
+</div>
+<div style="border-radius:20px;background:#D3E8DC;padding:22px">
+<div style="font:500 11.5px 'Roboto Mono',monospace;letter-spacing:.07em;text-transform:uppercase;color:#3B5145">Streak · day 6</div>
+<div style="display:flex;align-items:center;gap:6px;margin-top:14px">
+<span style="width:24px;height:24px;border-radius:6px;background:#1D6A50"></span><span style="width:24px;height:24px;border-radius:6px;background:#1D6A50"></span>
+<span style="width:24px;height:24px;border-radius:6px;background:repeating-linear-gradient(135deg,#A6C9B6 0 3px,#D3E8DC 3px 6px);border:1px solid #A6C9B6;box-sizing:border-box"></span>
+<span style="width:24px;height:24px;border-radius:6px;background:#1D6A50"></span><span style="width:24px;height:24px;border-radius:6px;background:#1D6A50"></span><span style="width:24px;height:24px;border-radius:6px;background:#1D6A50"></span>
+</div>
+<p style="margin:14px 0 0;font:400 13.5px/1.5 Roboto,sans-serif;color:#1A2C24">Wednesday you missed. The streak carried on regardless — a lapse is not a relapse.</p>
+</div>
+</div>
+
+<div style="margin-top:16px;border-radius:20px;background:#EDF1EB;padding:22px">
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px"><span style="font:500 11.5px 'Roboto Mono',monospace;letter-spacing:.07em;text-transform:uppercase;color:#414942">The session</span><span style="flex:1"></span><span style="font:400 11px 'Roboto Mono',monospace;color:#6F7A72">13:36 → 15:40</span></div>
+<div style="display:flex;gap:3px;height:52px;align-items:stretch">
+<span style="flex:5;background:#1D6A50;border-radius:3px"></span>
+<span style="flex:4;background:#1D6A50;border-radius:3px"></span>
+<span style="flex:2;border-radius:3px;background:repeating-linear-gradient(135deg,#C0C9C1 0 3px,#EDF1EB 3px 6px)"></span>
+<span style="flex:6;background:#1D6A50;border-radius:3px"></span>
+<span style="flex:3;background:#A6F2CE;border-radius:3px"></span>
+<span style="flex:8;background:#1D6A50;border-radius:3px"></span>
+<span style="flex:2;border-radius:3px;background:repeating-linear-gradient(135deg,#C0C9C1 0 3px,#EDF1EB 3px 6px)"></span>
+<span style="flex:7;background:#1D6A50;border-radius:3px"></span>
+</div>
+<div style="display:flex;gap:18px;margin-top:12px;font:400 11.5px 'Roboto Mono',monospace;color:#414942">
+<span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:2px;background:#1D6A50"></span>on task 1 h 47 m</span>
+<span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:2px;background:repeating-linear-gradient(135deg,#C0C9C1 0 3px,#EDF1EB 3px 6px)"></span>drift 6 m</span>
+<span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:2px;background:#A6F2CE"></span>earned break 8 m</span>
+</div>
+</div>
+
+<div style="margin-top:16px;border-radius:20px;border:1px solid #C0C9C1;padding:22px">
+<div style="font:500 11.5px 'Roboto Mono',monospace;letter-spacing:.07em;text-transform:uppercase;color:#414942;margin-bottom:16px">Drift autopsy</div>
+<div style="display:flex;flex-direction:column;gap:14px">
+<div style="display:flex;gap:14px;align-items:flex-start">
+<span style="width:46px;font:400 12.5px 'Roboto Mono',monospace;color:#6F7A72;padding-top:2px">14:12</span>
+<span style="width:8px;height:8px;border-radius:50%;background:#8C4A45;margin-top:7px"></span>
+<div style="flex:1"><div style="font:400 14.5px/1.5 Roboto,sans-serif;color:#191C1A">Left three minutes after opening the derivation — football highlights.</div><div style="font:400 12.5px Roboto,sans-serif;color:#414942">Nudge quoted your Thursday line. Back in 4 min.</div></div>
+</div>
+<div style="display:flex;gap:14px;align-items:flex-start">
+<span style="width:46px;font:400 12.5px 'Roboto Mono',monospace;color:#6F7A72;padding-top:2px">15:26</span>
+<span style="width:8px;height:8px;border-radius:50%;background:#8C4A45;margin-top:7px"></span>
+<div style="flex:1"><div style="font:400 14.5px/1.5 Roboto,sans-serif;color:#191C1A">Phone in hand, 40 minutes into a stretch with no break.</div><div style="font:400 12.5px Roboto,sans-serif;color:#414942">Camera signal. Back in 2 min, then took the earned break.</div></div>
+</div>
+<div style="display:flex;gap:14px;align-items:flex-start;padding-top:14px;border-top:1px solid #DDE3DC">
+<span style="width:46px;color:#1D6A50;font:400 20px/1 'Material Symbols Rounded'">insights</span>
+<div style="flex:1;font:400 15.5px/1.5 Roboto,sans-serif;color:#191C1A;text-wrap:pretty">You do not drift when bored. You drift the minute a problem gets hard, and again around the 40-minute mark.</div>
+</div>
+</div>
+</div>
+
+<div style="margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:16px">
+<div style="border-radius:20px;background:#EDF1EB;padding:22px">
+<div style="font:500 11.5px 'Roboto Mono',monospace;letter-spacing:.07em;text-transform:uppercase;color:#414942;margin-bottom:14px">Learner model · updated</div>
+<div style="display:flex;flex-direction:column;gap:11px;font:400 13px/1.5 'Roboto Mono',monospace;color:#191C1A">
+<div><span style="color:#6F7A72">weak</span> damping ratio, phase lag</div>
+<div><span style="color:#6F7A72">strong</span> free oscillation, energy method</div>
+<div><span style="color:#6F7A72">drift trigger</span> first hard step</div>
+<div><span style="color:#6F7A72">focus streak</span> 22 min avg · 34 best</div>
+<div><span style="color:#6F7A72">best nudge</span> quote their own why</div>
+<div><span style="color:#6F7A72">next</span> same difficulty</div>
+</div>
+</div>
+<div style="border-radius:20px;background:#C1E8FB;padding:22px;display:flex;flex-direction:column">
+<div style="font:500 11.5px 'Roboto Mono',monospace;letter-spacing:.07em;text-transform:uppercase;color:#0A4A5E;margin-bottom:12px">Tomorrow · drafted</div>
+<p style="margin:0 0 auto;font:400 17px/1.45 Roboto,sans-serif;color:#062E3C;text-wrap:pretty">Phase lag first, while you are fresh. Break scheduled at 35 minutes, before you go looking for one.</p>
+<div style="display:flex;flex-direction:column;gap:8px;margin-top:20px">
+<button style="border:0;border-radius:100px;padding:13px;background:#0A4A5E;color:#fff;font:500 14px Roboto,sans-serif;cursor:pointer;white-space:nowrap">Accept and schedule</button>
+<button style="border:1px solid #4E7A8A;border-radius:100px;padding:13px;background:transparent;color:#062E3C;font:500 14px Roboto,sans-serif;cursor:pointer;white-space:nowrap">Edit the rules</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="3d">
+<div class="dv-olabel"><a class="dv-oid" href="#3d">3d</a>Privacy sheet and verdict log — what it kept, what it threw away</div>
+<div class="dv-card" data-screen-label="3d Privacy" style="width:460px;border-radius:28px 28px 20px 20px;background:#F7FAF6;border-color:#C0C9C1;padding:8px 24px 26px;font-family:Roboto,system-ui,sans-serif">
+<div style="display:flex;justify-content:center;padding:10px 0 16px"><span style="width:32px;height:4px;border-radius:100px;background:#C0C9C1"></span></div>
+<h3 style="margin:0 0 8px;font:400 22px/1.3 Roboto,sans-serif;color:#191C1A">What Heid Doon keeps</h3>
+<p style="margin:0 0 18px;font:400 14px/1.55 Roboto,sans-serif;color:#414942;text-wrap:pretty">Frames are judged by a model running on this machine and dropped the moment a verdict exists. The verdicts are yours — export or delete them whenever.</p>
+<div style="display:flex;flex-direction:column;gap:2px">
+<div style="display:flex;align-items:center;gap:14px;padding:12px 4px;border-top:1px solid #DDE3DC"><span style="color:#1D6A50;font:400 20px/1 'Material Symbols Rounded'">delete</span><div style="flex:1"><div style="font:400 14px Roboto,sans-serif;color:#191C1A">Screen and camera frames</div><div style="font:400 12.5px Roboto,sans-serif;color:#414942">Never written to disk, never sent anywhere</div></div><span style="padding:5px 10px;border-radius:8px;background:#F9DEDC;color:#410E0B;font:500 11px 'Roboto Mono',monospace">discarded</span></div>
+<div style="display:flex;align-items:center;gap:14px;padding:12px 4px;border-top:1px solid #DDE3DC"><span style="color:#1D6A50;font:400 20px/1 'Material Symbols Rounded'">description</span><div style="flex:1"><div style="font:400 14px Roboto,sans-serif;color:#191C1A">Verdicts and word counts</div><div style="font:400 12.5px Roboto,sans-serif;color:#414942">events.json, in your own folder</div></div><span style="padding:5px 10px;border-radius:8px;background:#D3E8DC;color:#1A2C24;font:500 11px 'Roboto Mono',monospace">kept</span></div>
+<div style="display:flex;align-items:center;gap:14px;padding:12px 4px;border-top:1px solid #DDE3DC;border-bottom:1px solid #DDE3DC"><span style="color:#1D6A50;font:400 20px/1 'Material Symbols Rounded'">cloud_off</span><div style="flex:1"><div style="font:400 14px Roboto,sans-serif;color:#191C1A">Network</div><div style="font:400 12.5px Roboto,sans-serif;color:#414942">Open weights, no account, works offline</div></div><span style="padding:5px 10px;border-radius:8px;background:#D3E8DC;color:#1A2C24;font:500 11px 'Roboto Mono',monospace">none</span></div>
+</div>
+
+<div style="margin-top:20px;font:500 11.5px 'Roboto Mono',monospace;letter-spacing:.07em;text-transform:uppercase;color:#414942">Verdict log · last three</div>
+<div style="margin-top:10px;border-radius:12px;background:#EDF1EB;padding:14px 15px;display:flex;flex-direction:column;gap:12px;font:400 12px/1.55 'Roboto Mono',monospace;color:#414942">
+<div><span style="color:#1D6A50">15:38 on_task</span> · a lecture slide on damped oscillation, notes open beside it</div>
+<div><span style="color:#8C4A45">15:26 off_task</span> · a phone held up in front of the face, screen lit</div>
+<div><span style="color:#1D6A50">15:24 on_task</span> · handwritten working in a notebook, page half filled</div>
+</div>
+<div style="display:flex;gap:8px;margin-top:18px">
+<button style="border:0;border-radius:100px;padding:11px 20px;background:#1D6A50;color:#fff;font:500 14px Roboto,sans-serif;cursor:pointer;white-space:nowrap">Export my data</button>
+<button style="border:1px solid #71796F;border-radius:100px;padding:11px 20px;background:transparent;color:#1D6A50;font:500 14px Roboto,sans-serif;cursor:pointer;white-space:nowrap">Delete everything</button>
+</div>
+</div>
+</div>
+
+</div>
+<p class="dv-next">Try next: “make it clickable — contract → watch → nudge → bouncer → receipt” · “add the session-start and empty states” · “tune the M3 seed colour”</p>
+</section>
+
+<section class="dv-turn" id="t2" style="background:#F7FAF6">
+<div class="dv-thd"><a class="dv-tid" href="#t2">2</a><span class="dv-tname">Material 3 — the always-on HUD</span></div>
+<p style="margin:0 0 22px;max-width:780px;font:400 13px/1.6 Roboto,system-ui,sans-serif;color:#414942">M3 tonal surfaces, one seed colour (focus green) with a tertiary for the bouncer and error-container tones for drift — no red alarm states. Roboto type scale, standard elevation levels, 28dp cards, fully-rounded state bars. The loop: watch → nudge → bouncer → diff → receipt. Light for on-desktop use, dark for the always-on-top overlay.</p>
+<div class="dv-opts">
+
+<div class="dv-opt" id="2a">
+<div class="dv-olabel"><a class="dv-oid" href="#2a">2a</a>Material 3 light — the loop as tonal cards</div>
+<div class="dv-card" style="width:480px;padding:28px 24px 30px;background:#EDF1EB;border-color:#C0C9C1;border-radius:16px">
+<div style="display:flex;flex-direction:column;gap:26px;font-family:Roboto,system-ui,sans-serif">
+
+<div style="display:flex;flex-direction:column;gap:8px">
+<span class="cap" style="font-family:'Roboto Mono',monospace;color:#414942">Watch · collapsed bar</span>
+<div data-screen-label="2a Watch" style="display:flex;align-items:center;gap:14px;padding:10px 10px 10px 18px;border-radius:100px;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.3),0 2px 6px 2px rgba(0,0,0,.1)">
+<span style="width:10px;height:10px;border-radius:50%;background:#1D6A50;box-shadow:0 0 0 5px rgba(29,106,80,.14)"></span>
+<div style="display:flex;flex-direction:column;gap:1px">
+<span style="font:500 14px/1.3 Roboto,sans-serif;color:#191C1A">Heid doon · 34 min</span>
+<span style="font:400 11px/1.3 Roboto,sans-serif;color:#414942">screen · camera · page</span>
+</div>
+<span style="flex:1"></span>
+<span style="display:flex;gap:3px;align-items:flex-end;height:18px">
+<span style="width:3px;height:14px;background:#1D6A50;border-radius:2px"></span><span style="width:3px;height:18px;background:#1D6A50;border-radius:2px"></span><span style="width:3px;height:9px;background:#A6C9B6;border-radius:2px"></span><span style="width:3px;height:16px;background:#1D6A50;border-radius:2px"></span><span style="width:3px;height:6px;background:#A6C9B6;border-radius:2px"></span><span style="width:3px;height:15px;background:#1D6A50;border-radius:2px"></span>
+</span>
+<button style="border:0;width:40px;height:40px;border-radius:100px;background:#D3E8DC;color:#0B2A1E;font:400 20px/1 'Material Symbols Rounded';cursor:pointer">pause</button>
+</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:8px">
+<span class="cap" style="font-family:'Roboto Mono',monospace;color:#414942">Intervene · elevated card, level 3</span>
+<div data-screen-label="2a Nudge" style="border-radius:28px;background:#fff;padding:22px 22px 18px;box-shadow:0 4px 8px 3px rgba(0,0,0,.12),0 1px 3px rgba(0,0,0,.3)">
+<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+<span style="display:flex;align-items:center;gap:7px;padding:6px 12px 6px 10px;border-radius:8px;background:#F9DEDC;color:#410E0B;font:500 11px Roboto,sans-serif">
+<span style="width:7px;height:7px;border-radius:50%;background:#8C4A45"></span>Drifted · 2 min</span>
+<span style="flex:1"></span>
+<span style="font:400 11px 'Roboto Mono',monospace;color:#6F7A72">judged locally · frame discarded</span>
+</div>
+<h3 style="margin:0 0 8px;font:400 22px/1.32 Roboto,sans-serif;color:#191C1A;text-wrap:pretty">The page has not moved since 14:12</h3>
+<p style="margin:0 0 16px;font:400 14px/1.5 Roboto,sans-serif;color:#414942;text-wrap:pretty">You said this chapter is the thing standing between you and Thursday. Come back to the derivation and I will leave you be.</p>
+<div style="border-radius:12px;background:#EDF1EB;padding:14px 15px;display:grid;grid-template-columns:auto 1fr;gap:7px 14px;font:400 12.5px/1.5 'Roboto Mono',monospace;color:#414942">
+<span style="color:#6F7A72">saw</span><span>a football highlights reel, full screen</span>
+<span style="color:#6F7A72">reason</span><span>not in your allowed list, no lecture structure on screen</span>
+</div>
+<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px">
+<button style="border:0;border-radius:100px;padding:10px 18px;background:transparent;color:#1D6A50;font:500 14px Roboto,sans-serif;cursor:pointer;white-space:nowrap">Earn a break</button>
+<button style="border:0;border-radius:100px;padding:10px 22px;background:#1D6A50;color:#fff;font:500 14px Roboto,sans-serif;cursor:pointer;white-space:nowrap;box-shadow:0 1px 2px rgba(0,0,0,.3)">Back to the page</button>
+</div>
+</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:8px">
+<span class="cap" style="font-family:'Roboto Mono',monospace;color:#414942">Negotiate · the bouncer dialog</span>
+<div data-screen-label="2a Bouncer" style="border-radius:28px;background:#F1F5EF;padding:24px 24px 20px;box-shadow:0 6px 10px 4px rgba(0,0,0,.1),0 2px 3px rgba(0,0,0,.3)">
+<div style="display:flex;justify-content:center;margin-bottom:14px"><span style="width:44px;height:44px;border-radius:100px;background:#C1E8FB;color:#0A4A5E;display:flex;align-items:center;justify-content:center;font:400 22px/1 'Material Symbols Rounded'">psychology</span></div>
+<h3 style="margin:0 0 8px;text-align:center;font:400 22px/1.32 Roboto,sans-serif;color:#191C1A">Eight minutes, if you can answer this</h3>
+<p style="margin:0 0 16px;text-align:center;font:400 14px/1.5 Roboto,sans-serif;color:#414942;text-wrap:pretty">From your own notes: why does the damping term change the resonant peak rather than the natural frequency?</p>
+<div style="border-radius:4px 4px 0 0;background:#E6EBE4;border-bottom:2px solid #1D6A50;padding:10px 16px 8px;min-height:56px">
+<div style="font:400 11px Roboto,sans-serif;color:#1D6A50;margin-bottom:3px">Your answer</div>
+<div style="font:400 14px/1.5 Roboto,sans-serif;color:#6F7A72">Two sentences in your own words is plenty</div>
+</div>
+<div style="display:flex;align-items:center;justify-content:space-between;margin-top:16px">
+<span style="font:400 11px 'Roboto Mono',monospace;color:#6F7A72">graded on key points</span>
+<div style="display:flex;gap:8px">
+<button style="border:0;border-radius:100px;padding:10px 18px;background:transparent;color:#1D6A50;font:500 14px Roboto,sans-serif;cursor:pointer;white-space:nowrap">Not now</button>
+<button style="border:0;border-radius:100px;padding:10px 22px;background:#A6F2CE;color:#00281A;font:500 14px Roboto,sans-serif;cursor:pointer;white-space:nowrap">Open the door</button>
+</div>
+</div>
+</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:8px">
+<span class="cap" style="font-family:'Roboto Mono',monospace;color:#414942">Truth · work-diff, filled card</span>
+<div data-screen-label="2a Diff" style="border-radius:20px;background:#D3E8DC;padding:20px 22px">
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+<span style="font:400 34px/1 Roboto,sans-serif;color:#0B2A1E">+214</span>
+<span style="font:400 13px/1.4 Roboto,sans-serif;color:#1A2C24">words in ch4-notes.md<br>since 13:40</span>
+<span style="flex:1"></span>
+<span style="display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:8px;background:#1D6A50;color:#fff;font:500 12px Roboto,sans-serif">progress</span>
+</div>
+<p style="margin:0;font:400 13.5px/1.55 Roboto,sans-serif;color:#1A2C24;text-wrap:pretty">You worked the derivation through rather than restating it. The final paragraph repeats an earlier definition — that part is padding.</p>
+</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:8px">
+<span class="cap" style="font-family:'Roboto Mono',monospace;color:#414942">Receipt · session end snack</span>
+<div data-screen-label="2a Receipt" style="border-radius:12px;background:#2F3330;padding:16px 16px 14px 20px;display:flex;align-items:center;gap:18px;box-shadow:0 1px 2px rgba(0,0,0,.3),0 2px 6px 2px rgba(0,0,0,.15)">
+<div style="display:flex;flex-direction:column;gap:3px">
+<span style="font:400 14px/1.45 Roboto,sans-serif;color:#EFF1ED">Focus 78, up 9. Two drifts, both recovered inside four minutes.</span>
+<span style="font:400 12px/1.4 'Roboto Mono',monospace;color:#C0C9C1">tomorrow: phase lag first, break at 35 min</span>
+</div>
+<button style="border:0;border-radius:100px;padding:9px 16px;background:transparent;color:#A6F2CE;font:500 14px Roboto,sans-serif;cursor:pointer;white-space:nowrap">Read receipt</button>
+</div>
+</div>
+
+</div>
+</div>
+</div>
+
+<div class="dv-opt" id="2b">
+<div class="dv-olabel"><a class="dv-oid" href="#2b">2b</a>Material 3 dark — the overlay that sits on top of your work</div>
+<div class="dv-card" style="width:470px;padding:28px 24px 30px;background:#101413;border-color:#2F3330;border-radius:16px">
+<div style="display:flex;flex-direction:column;gap:26px;font-family:Roboto,system-ui,sans-serif">
+
+<div style="display:flex;flex-direction:column;gap:8px">
+<span class="cap" style="font-family:'Roboto Mono',monospace;color:#8B958D">Watch · docked bar</span>
+<div data-screen-label="2b Watch" style="display:flex;align-items:center;gap:14px;padding:10px 10px 10px 18px;border-radius:100px;background:#1D211F;box-shadow:0 2px 6px 2px rgba(0,0,0,.4)">
+<span style="width:10px;height:10px;border-radius:50%;background:#8AD6AF;box-shadow:0 0 0 5px rgba(138,214,175,.16)"></span>
+<div style="display:flex;flex-direction:column;gap:1px">
+<span style="font:500 14px/1.3 Roboto,sans-serif;color:#E1E4DF">Heid doon · 34 min</span>
+<span style="font:400 11px/1.3 Roboto,sans-serif;color:#A8B2AA">3 signals live · nothing stored</span>
+</div>
+<span style="flex:1"></span>
+<button style="border:0;width:40px;height:40px;border-radius:100px;background:#2B4F3F;color:#A6F2CE;font:400 20px/1 'Material Symbols Rounded';cursor:pointer">pause</button>
+</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:8px">
+<span class="cap" style="font-family:'Roboto Mono',monospace;color:#8B958D">Intervene · dark elevated card</span>
+<div data-screen-label="2b Nudge" style="border-radius:28px;background:#222725;padding:22px 22px 18px;box-shadow:0 4px 8px 3px rgba(0,0,0,.45)">
+<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+<span style="display:flex;align-items:center;gap:7px;padding:6px 12px 6px 10px;border-radius:8px;background:#5C3B37;color:#FFDAD5;font:500 11px Roboto,sans-serif"><span style="width:7px;height:7px;border-radius:50%;background:#FFB4AB"></span>Drifted · 2 min</span>
+<span style="flex:1"></span>
+<span style="font:400 11px 'Roboto Mono',monospace;color:#8B958D">frame discarded</span>
+</div>
+<h3 style="margin:0 0 8px;font:400 22px/1.32 Roboto,sans-serif;color:#E1E4DF;text-wrap:pretty">The page has not moved since 14:12</h3>
+<p style="margin:0 0 16px;font:400 14px/1.5 Roboto,sans-serif;color:#C0C9C1;text-wrap:pretty">You said this chapter is the thing standing between you and Thursday.</p>
+<div style="border-radius:12px;background:#171B19;padding:14px 15px;display:grid;grid-template-columns:auto 1fr;gap:7px 14px;font:400 12.5px/1.5 'Roboto Mono',monospace;color:#A8B2AA">
+<span style="color:#6F7A72">saw</span><span>a football highlights reel, full screen</span>
+<span style="color:#6F7A72">reason</span><span>not allowed, and no lecture structure on screen</span>
+</div>
+<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px">
+<button style="border:0;border-radius:100px;padding:10px 18px;background:transparent;color:#8AD6AF;font:500 14px Roboto,sans-serif;cursor:pointer;white-space:nowrap">Earn a break</button>
+<button style="border:0;border-radius:100px;padding:10px 22px;background:#A6F2CE;color:#00281A;font:500 14px Roboto,sans-serif;cursor:pointer;white-space:nowrap">Back to the page</button>
+</div>
+</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:8px">
+<span class="cap" style="font-family:'Roboto Mono',monospace;color:#8B958D">Ribbon · drift as texture, never a red mark</span>
+<div data-screen-label="2b Ribbon" style="border-radius:20px;background:#1D211F;padding:20px 22px">
+<div style="display:flex;gap:3px;height:48px;align-items:stretch">
+<span style="flex:5;background:#8AD6AF;border-radius:3px"></span>
+<span style="flex:4;background:#8AD6AF;border-radius:3px"></span>
+<span style="flex:2;border-radius:3px;background:repeating-linear-gradient(135deg,#4A5450 0 3px,#222725 3px 6px)"></span>
+<span style="flex:6;background:#8AD6AF;border-radius:3px"></span>
+<span style="flex:3;background:#2B4F3F;border-radius:3px"></span>
+<span style="flex:8;background:#8AD6AF;border-radius:3px"></span>
+<span style="flex:2;border-radius:3px;background:repeating-linear-gradient(135deg,#4A5450 0 3px,#222725 3px 6px)"></span>
+<span style="flex:7;background:#8AD6AF;border-radius:3px"></span>
+</div>
+<div style="display:flex;gap:16px;margin-top:12px;font:400 11px 'Roboto Mono',monospace;color:#8B958D">
+<span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:2px;background:#8AD6AF"></span>on task</span>
+<span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:2px;background:repeating-linear-gradient(135deg,#4A5450 0 3px,#222725 3px 6px)"></span>drift</span>
+<span style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:2px;background:#2B4F3F"></span>earned break</span>
+</div>
+<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px">
+<span style="padding:7px 13px;border-radius:8px;border:1px solid #414942;color:#C0C9C1;font:500 12px Roboto,sans-serif">+512 words, substantive</span>
+<span style="padding:7px 13px;border-radius:8px;border:1px solid #414942;color:#C0C9C1;font:500 12px Roboto,sans-serif">streak resumed</span>
+<span style="padding:7px 13px;border-radius:8px;background:#2B4F3F;color:#A6F2CE;font:500 12px Roboto,sans-serif">break 19:40</span>
+</div>
+</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:8px">
+<span class="cap" style="font-family:'Roboto Mono',monospace;color:#8B958D">Contract · quoted back at you</span>
+<div data-screen-label="2b Contract" style="border-radius:20px;background:#1D211F;padding:20px 22px">
+<div style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:14px">
+<span style="padding:6px 11px;border-radius:8px;background:#2B4F3F;color:#A6F2CE;font:500 12px 'Roboto Mono',monospace">lecture slides</span>
+<span style="padding:6px 11px;border-radius:8px;background:#2B4F3F;color:#A6F2CE;font:500 12px 'Roboto Mono',monospace">textbook pdf</span>
+<span style="padding:6px 11px;border-radius:8px;background:#2B4F3F;color:#A6F2CE;font:500 12px 'Roboto Mono',monospace">ch4-notes.md</span>
+<span style="padding:6px 11px;border-radius:8px;background:#5C3B37;color:#FFDAD5;font:500 12px 'Roboto Mono',monospace">football</span>
+<span style="padding:6px 11px;border-radius:8px;background:#5C3B37;color:#FFDAD5;font:500 12px 'Roboto Mono',monospace">discord</span>
+</div>
+<p style="margin:0;font:400 15px/1.5 Roboto,sans-serif;color:#E1E4DF">“the chapter I keep dodging, and the exam is Thursday”</p>
+<p style="margin:8px 0 0;font:400 11.5px 'Roboto Mono',monospace;color:#8B958D">your words · used verbatim in every nudge</p>
+</div>
+</div>
+
+</div>
+</div>
+</div>
+
+</div>
+<p class="dv-next">Try next: “make <a class="dv-oid" href="#2b">2b</a> a working prototype with the full loop clickable” · “merge <a class="dv-oid" href="#2a">2a</a>'s bouncer into <a class="dv-oid" href="#2b">2b</a>” · “try a different M3 seed colour”</p>
+</section>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{}"></script>
+</body>
+</html>

@@ -345,6 +345,69 @@ class TestPersistence:
         assert len(resumed.events) == 1
 
 
+# ── the student's data is the student's ─────────────────────────────────────
+
+
+class TestExportAndDelete:
+    """Export and delete are product features, not admin tools.
+
+    "Monitoring you opted into" only means something if you can see all of it and
+    take it away, so both are covered like any other mechanic.
+    """
+
+    def test_export_contains_the_session_and_its_events(self, session):
+        session._record(Event(kind="screen", on_task=True, seen="notes open"))
+        session.store.add_snapshot(session.id, "notes.md", "entropy is a state function")
+
+        payload = session.store.export_all()
+        assert len(payload["sessions"]) == 1
+        assert payload["sessions"][0]["contract"]["task"] == CONTRACT.task
+        assert len(payload["events"]) == 1
+        assert payload["events"][0]["seen"] == "notes open"
+        assert payload["artifact_snapshots"][0]["content"] == "entropy is a state function"
+
+    def test_export_is_json_serialisable(self, session):
+        session._record(Event(kind="camera", on_task=False, seen="phone in hand"))
+        json.dumps(session.store.export_all())  # must not raise
+
+    def test_export_holds_no_frame(self, session):
+        """The structural guarantee: there is no field an image could live in."""
+        session._record(Event(kind="screen", on_task=True, seen="notes"))
+        blob = json.dumps(session.store.export_all()).lower()
+        for forbidden in ("image", "jpeg", "png", "base64", "frame_data"):
+            assert forbidden not in blob
+
+    def test_delete_removes_everything_and_reports_counts(self, session):
+        session._record(Event(kind="screen", on_task=True, seen="notes"))
+        session.store.add_snapshot(session.id, "notes.md", "content")
+        session.store.save_learner(LearnerModel(weak_topics=["entropy"]))
+
+        removed = session.store.delete_all()
+        assert removed["sessions"] == 1
+        assert removed["events"] == 1
+        assert removed["snapshots"] == 1
+
+        assert session.store.counts() == {"sessions": 0, "events": 0, "snapshots": 0, "verdicts": 0}
+        assert session.store.get_learner().weak_topics == []
+        assert session.store.recent_sessions() == []
+
+    def test_delete_on_an_empty_store_is_harmless(self, store):
+        assert store.delete_all()["sessions"] == 0
+
+    def test_recent_verdicts_are_newest_first_and_frames_only(self, session):
+        session._record(Event(kind="screen", on_task=True, seen="first", at=1000.0))
+        session._record(Event(kind="diff", seen="notes.md", at=1001.0))
+        session._record(Event(kind="camera", on_task=False, seen="second", at=1002.0))
+
+        recent = session.store.recent_verdicts(limit=3)
+        assert [entry["seen"] for entry in recent] == ["second", "first"]  # diff excluded
+
+    def test_counts_reflect_what_is_on_disk(self, session):
+        session._record(Event(kind="screen", on_task=True, seen="a"))
+        session._record(Event(kind="screen", on_task=True, seen="b"))
+        assert session.store.counts()["events"] == 2
+
+
 # ── the artifact watcher ────────────────────────────────────────────────────
 
 

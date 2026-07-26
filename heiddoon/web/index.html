@@ -7,216 +7,384 @@
 <link rel="stylesheet" href="/app.css">
 </head>
 <body>
+
+<!-- Icon sprite. Inline rather than Material Symbols from Google Fonts: this app
+     claims nothing leaves your machine, so it makes no external requests. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <symbol id="i-draw" viewBox="0 0 24 24"><path d="M12 19h8M4 19l1.5-4.5L15 5a2.1 2.1 0 013 3l-9.5 9.5L4 19z"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6-10-6-10-6z"/><circle cx="12" cy="12" r="2.6"/></symbol>
+  <symbol id="i-receipt" viewBox="0 0 24 24"><path d="M6 3h12v16.5a1.5 1.5 0 01-2.3 1.3L12 19l-3.7 1.8A1.5 1.5 0 016 19.5V3z"/><path d="M9 7h6M9 11h6M9 15h3"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4.5" y="10.5" width="15" height="10" rx="2"/><path d="M8 10.5V7a4 4 0 018 0v3.5"/></symbol>
+  <symbol id="i-history" viewBox="0 0 24 24"><path d="M3.5 12a8.5 8.5 0 108.5-8.5A8.5 8.5 0 005.6 6.4"/><path d="M3.5 3.5v3.4h3.4M12 7.5V12l3 2"/></symbol>
+  <symbol id="i-screen" viewBox="0 0 24 24"><rect x="2.5" y="4" width="19" height="12.5" rx="2"/><path d="M8.5 20.5h7M12 16.5v4"/></symbol>
+  <symbol id="i-camera" viewBox="0 0 24 24"><path d="M3 8.5A1.5 1.5 0 014.5 7h2.2l1.2-2h6.2l1.2 2h4.2A1.5 1.5 0 0121 8.5v9A1.5 1.5 0 0119.5 19h-15A1.5 1.5 0 013 17.5v-9z"/><circle cx="12" cy="13" r="3.2"/></symbol>
+  <symbol id="i-doc" viewBox="0 0 24 24"><path d="M6 2.5h8l4.5 4.5v14.5H6z"/><path d="M14 2.5V7h4.5M9 12h6M9 16h6"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 019.5 4a8.5 8.5 0 1010.5 10.5z"/></symbol>
+  <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3zM18.5 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.6 2.6L16 9.5"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5M12 16h.01"/></symbol>
+  <symbol id="i-insights" viewBox="0 0 24 24"><path d="M3.5 20V9M9.2 20V4.5M15 20v-8M20.5 20V7"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4.5h6V7M6 7l1 13h10l1-13M10 11v5M14 11v5"/></symbol>
+  <symbol id="i-cloud-off" viewBox="0 0 24 24"><path d="M4 4l16 16M7.5 18h9.8a3.7 3.7 0 00.9-7.3A5.6 5.6 0 009 7.6"/><path d="M6.4 10.8A3.7 3.7 0 007.5 18"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3.5v11M7.5 10.5L12 15l4.5-4.5M4.5 19.5h15"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16.5V5.5M7.5 10L12 5.5 16.5 10M4.5 19.5h15"/></symbol>
+  <symbol id="i-ticket" viewBox="0 0 24 24"><path d="M3.5 8.5A1.5 1.5 0 015 7h14a1.5 1.5 0 011.5 1.5v2a2.5 2.5 0 000 5v2A1.5 1.5 0 0119 19H5a1.5 1.5 0 01-1.5-1.5v-2a2.5 2.5 0 000-5v-2z"/><path d="M9.5 11.5h5M9.5 15h3"/></symbol>
+</defs></svg>
+
 <div class="app">
+
   <nav class="rail">
-    <div class="wordmark">Heid Doon<small>reads your work</small></div>
-    <div class="model-badge" id="model-badge"><span class="dot"></span><span id="model-text">checking…</span></div>
-
-    <button class="nav-btn active" data-screen="contract"><span class="n">1</span> Contract</button>
-    <button class="nav-btn" data-screen="session" id="nav-session" disabled><span class="n">2</span> Session</button>
-    <button class="nav-btn" data-screen="receipt" id="nav-receipt" disabled><span class="n">3</span> Receipt</button>
-    <button class="nav-btn" data-screen="history"><span class="n">4</span> History</button>
-
-    <div class="spacer"></div>
-    <div class="privacy-strip" id="privacy-strip">
-      <b>Privacy</b><span id="privacy-text">…</span>
-    </div>
+    <div class="rail-logo">hd</div>
+    <button class="rail-btn active" data-screen="contract">
+      <span class="pill"><svg class="ic"><use href="#i-draw"/></svg></span><span class="lbl">Contract</span>
+    </button>
+    <button class="rail-btn" data-screen="watch" id="nav-watch" disabled>
+      <span class="pill"><svg class="ic"><use href="#i-eye"/></svg></span><span class="lbl">Watch</span>
+    </button>
+    <button class="rail-btn" data-screen="receipt" id="nav-receipt" disabled>
+      <span class="pill"><svg class="ic"><use href="#i-receipt"/></svg></span><span class="lbl">Receipt</span>
+    </button>
+    <button class="rail-btn" data-screen="history">
+      <span class="pill"><svg class="ic"><use href="#i-history"/></svg></span><span class="lbl">History</span>
+    </button>
+    <span class="spacer"></span>
+    <button class="rail-btn" data-screen="privacy">
+      <span class="pill"><svg class="ic"><use href="#i-lock"/></svg></span><span class="lbl">Privacy</span>
+    </button>
   </nav>
+
+  <div>
+  <header class="bar">
+    <h1 id="bar-title">New session</h1>
+    <span class="spacer"></span>
+    <span class="bar-note" id="bar-note"></span>
+    <span class="model-badge" id="model-badge">checking…</span>
+  </header>
 
   <main class="stage">
 
-    <!-- 1 · CONTRACT -->
+    <!-- ── 1 · CONTRACT (3a) ────────────────────────────────────────────── -->
     <section class="screen active" id="scr-contract">
-      <div class="crumb">Step one</div>
-      <h1>Write your contract</h1>
-      <p class="sub">Your rules, in your own words. Everything after this is judged against
-        what you write here — nothing gets added that you did not ask for.</p>
+      <div class="grid two">
 
-      <div class="card" style="margin-top:20px">
-        <div class="field">
-          <label class="f" for="contract-text">What are you doing, and what counts as on task</label>
-          <textarea id="contract-text" rows="7" placeholder="I'm revising thermodynamics chapter 4 (entropy) until 12:30. Exam Friday — no all-nighter this time. Lecture videos and PDFs about thermodynamics are fine, music is fine, my study group chat is fine when we're discussing the problem set. No social media, no entertainment videos. Track notes_thermo.md. Camera presence on. Kind but sharp."></textarea>
-          <p class="note">Name a file and Heid Doon will judge whether your work actually moved — the one
-            signal that still works when you procrastinate on your phone.</p>
-        </div>
-        <div class="actions">
-          <button class="btn btn-primary" id="btn-compile">Compile my rules</button>
-          <button class="btn btn-ghost btn-sm" id="btn-example">Use the example</button>
-        </div>
-      </div>
+        <div>
+          <div class="field">
+            <label for="contract-text">What is today for</label>
+            <textarea id="contract-text" rows="7" maxlength="600" placeholder="Two hours on the Ch.4 problem set. Lecture slides, the textbook PDF and my notes file are fine. No football, no Discord. I'm writing into ch4-notes.md. This is the chapter I keep dodging and the exam is Thursday."></textarea>
+          </div>
+          <div class="field-foot">
+            <span>Plain words. It will quote you back.</span>
+            <span id="char-count">0/600</span>
+          </div>
 
-      <div class="card hidden" id="contract-preview">
-        <h2>Your rules, as Heid Doon understood them</h2>
-        <div class="row two">
-          <div>
-            <label class="f">Task</label><div id="c-task"></div>
-            <label class="f" style="margin-top:14px">Because</label><div id="c-why" class="sub" style="margin:0"></div>
+          <div class="eyebrow" style="margin-top:22px">Signals</div>
+          <div class="signals" id="signals">
+            <button class="signal on" data-signal="screen">
+              <svg class="ic"><use href="#i-screen"/></svg>
+              <span class="txt"><span class="name">Screen</span><span class="desc" id="sig-screen-desc">Judged every 20 seconds</span></span>
+              <span class="switch"><span class="knob"></span></span>
+            </button>
+            <button class="signal on" data-signal="camera">
+              <svg class="ic"><use href="#i-camera"/></svg>
+              <span class="txt"><span class="name">Camera</span><span class="desc">Presence and phone in hand</span></span>
+              <span class="switch"><span class="knob"></span></span>
+            </button>
+            <button class="signal on" data-signal="diff">
+              <svg class="ic"><use href="#i-doc"/></svg>
+              <span class="txt"><span class="name">The page itself</span><span class="desc" id="sig-diff-desc">Read for progress, not content</span></span>
+              <span class="switch"><span class="knob"></span></span>
+            </button>
+            <button class="signal" data-signal="idle">
+              <svg class="ic"><use href="#i-moon"/></svg>
+              <span class="txt"><span class="name">Idle</span><span class="desc">Nothing on screen changing, nothing typed</span></span>
+              <span class="switch"><span class="knob"></span></span>
+            </button>
           </div>
-          <div>
-            <label class="f">Allowed</label><div class="chips" id="c-allowed"></div>
-            <label class="f" style="margin-top:14px">Drift</label><div class="chips" id="c-blocked"></div>
-            <label class="f" style="margin-top:14px">Signals</label><div class="chips" id="c-signals"></div>
+
+          <div class="actions" style="margin-top:22px">
+            <button class="btn btn-filled" id="btn-compile">Compile my rules</button>
+            <button class="btn btn-text" id="btn-example">Use the example</button>
           </div>
         </div>
-        <div class="actions">
-          <button class="btn btn-primary" id="btn-start">Heid doon →</button>
-          <button class="btn btn-ghost" id="btn-edit">Change something</button>
+
+        <div class="card flat" id="compiled-panel">
+          <div class="row-between" style="margin-bottom:16px">
+            <svg class="ic sm" style="color:var(--primary)"><use href="#i-spark"/></svg>
+            <h3 class="sub">Compiled contract</h3>
+            <span class="spacer"></span>
+            <span class="hint mono" id="compiled-state">waiting</span>
+          </div>
+
+          <div id="compiled-empty" class="hint">
+            Write your rules on the left, then compile. Nothing is added that you did not ask for —
+            what appears here is what gets enforced.
+          </div>
+
+          <div class="readout hidden" id="compiled-body">
+            <div><div class="k">task</div><div class="v" id="c-task"></div></div>
+            <div><div class="k">allowed</div><div class="chips" id="c-allowed"></div></div>
+            <div><div class="k">blocked</div><div class="chips" id="c-blocked"></div></div>
+            <div><div class="k">artifact</div><div class="v mono" id="c-artifacts"></div></div>
+            <div><div class="k">why it matters</div><div class="v quote" id="c-why"></div></div>
+            <div><div class="k">tone of nudges</div>
+              <div class="segmented" id="c-tone">
+                <button data-tone="plain">Plain</button>
+                <button data-tone="warm">Warm</button>
+                <button data-tone="blunt">Blunt</button>
+              </div>
+            </div>
+            <div><div class="k">ends</div><div class="v" id="c-ends"></div></div>
+          </div>
+
+          <button class="btn btn-filled block hidden" id="btn-start" style="margin-top:20px">Start watching</button>
         </div>
       </div>
     </section>
 
-    <!-- 2 · SESSION -->
-    <section class="screen" id="scr-session">
-      <div class="crumb">Session <span id="session-id"></span></div>
-      <h1 id="session-task">…</h1>
+    <!-- ── 2 · WATCH ────────────────────────────────────────────────────── -->
+    <section class="screen" id="scr-watch">
+      <div class="watch-grid">
 
-      <div class="session-grid" style="margin-top:18px">
         <div>
-          <div class="card ring-wrap">
+          <div class="card timer-card">
             <div class="ring">
-              <svg width="180" height="180" viewBox="0 0 180 180">
-                <circle cx="90" cy="90" r="78" fill="none" stroke="var(--grid)" stroke-width="12"/>
-                <circle id="ring-fg" cx="90" cy="90" r="78" fill="none" stroke="url(#g)" stroke-width="12"
-                        stroke-linecap="round" stroke-dasharray="490" stroke-dashoffset="490"/>
-                <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0" stop-color="#3987e5"/><stop offset="1" stop-color="#9085e9"/>
-                </linearGradient></defs>
+              <svg width="184" height="184" viewBox="0 0 184 184">
+                <circle cx="92" cy="92" r="80" fill="none" stroke="var(--surface-variant)" stroke-width="12"/>
+                <circle id="ring-fg" cx="92" cy="92" r="80" fill="none" stroke="var(--primary)" stroke-width="12"
+                        stroke-linecap="round" stroke-dasharray="503" stroke-dashoffset="503"/>
               </svg>
-              <div class="t"><div>
+              <div class="mid"><div>
                 <div class="big" id="clock">0:00</div>
                 <div class="lbl">elapsed</div>
               </div></div>
             </div>
-            <div class="watcher-chip"><span class="pulse" id="pulse"></span><span id="watcher-label">watching</span></div>
+            <div class="status-chip" id="status-chip"><span class="dot"></span><span id="status-text">idle</span></div>
           </div>
 
-          <div class="card" style="margin-top:16px">
-            <h2>Judge a frame</h2>
+          <div class="card">
+            <h3 class="sub" style="margin-bottom:12px">Judge a frame</h3>
+            <div class="actions pair">
+              <button class="btn btn-filled sm" id="btn-screenshot">
+                <svg class="ic sm"><use href="#i-screen"/></svg>My screen
+              </button>
+              <button class="btn btn-tonal sm" id="btn-webcam">
+                <svg class="ic sm"><use href="#i-camera"/></svg>Webcam
+              </button>
+              <button class="btn btn-tonal sm hidden" id="btn-snap">Snap &amp; judge</button>
+            </div>
+            <p class="hint" style="margin-top:8px" id="capture-hint">
+              Capturing asks which window or screen to share, grabs one frame, and stops. Nothing keeps watching.
+            </p>
             <input type="file" id="frame-file" accept="image/*" class="hidden">
-            <div class="dropzone" id="dropzone">Drop a screenshot here, or click to choose</div>
-            <div class="actions">
-              <button class="btn btn-ghost btn-sm" id="btn-webcam">Use webcam</button>
-              <button class="btn btn-ghost btn-sm" id="btn-snap" disabled>Snap &amp; judge</button>
+            <div class="dropzone" id="dropzone" style="margin-top:12px">
+              <svg class="ic" style="color:var(--on-surface-dim)"><use href="#i-upload"/></svg>
+              <div style="margin-top:6px">…or drop an image, or click to choose</div>
             </div>
             <video id="webcam" class="hidden" autoplay playsinline muted></video>
           </div>
 
-          <div class="card" style="margin-top:16px">
-            <h2>Ask for a break</h2>
-            <p class="note" style="margin-top:0">One question from your own notes, then the break is yours.</p>
-            <div class="actions"><button class="btn btn-ghost btn-sm" id="btn-break">Can I have ten minutes</button></div>
+          <div class="card">
+            <h3 class="sub">Ask for a break</h3>
+            <p class="body tight" style="margin-top:4px">One question from your own notes, then it's yours.</p>
+            <div class="actions" style="margin-top:12px">
+              <button class="btn btn-outline sm" id="btn-break">Can I have ten minutes</button>
+            </div>
           </div>
         </div>
 
         <div>
           <div class="card">
-            <h2>Verdicts</h2>
-            <div class="feed" id="feed"><div class="feed-empty">Nothing yet. Judge a frame, or check your notes below.</div></div>
-          </div>
-
-          <div class="card" style="margin-top:16px">
-            <h2>Did the work actually move</h2>
-            <p class="note" style="margin-top:0">The device-independent signal: it reads the file, not the screen.</p>
-            <div class="actions" id="artifact-actions"></div>
-            <div class="row two" style="margin-top:12px">
-              <div><label class="f" for="diff-before">Notes — earlier</label><textarea id="diff-before" rows="7"></textarea></div>
-              <div><label class="f" for="diff-after">Notes — now</label><textarea id="diff-after" rows="7"></textarea></div>
+            <div class="row-between" style="margin-bottom:6px">
+              <div class="eyebrow">Verdicts</div>
+              <span class="spacer"></span>
+              <span class="hint mono" id="verdict-count"></span>
             </div>
-            <div class="actions"><button class="btn btn-primary btn-sm" id="btn-diff">Judge my progress</button></div>
+            <div class="feed" id="feed"><div class="feed-empty">Nothing yet. Judge a frame, or check your page below.</div></div>
           </div>
 
-          <div class="actions">
-            <button class="btn btn-primary" id="btn-finish">End session &amp; get my receipt</button>
+          <div class="card">
+            <div class="eyebrow">Did the work actually move</div>
+            <p class="body tight" style="margin-top:6px">The device-independent signal — it reads the page, not the screen.</p>
+            <div class="actions" style="margin-top:12px" id="artifact-actions"></div>
+            <div class="grid two" style="margin-top:14px">
+              <div>
+                <div class="field"><label for="diff-before">The page, earlier</label>
+                  <textarea id="diff-before" rows="6" placeholder="Paste how the page looked when you started."></textarea></div>
+              </div>
+              <div>
+                <div class="field"><label for="diff-after">The page, now</label>
+                  <textarea id="diff-after" rows="6" placeholder="Paste how it looks now."></textarea></div>
+              </div>
+            </div>
+            <div class="actions" style="margin-top:14px">
+              <button class="btn btn-filled sm" id="btn-diff">Judge my progress</button>
+            </div>
+          </div>
+
+          <div class="actions end" style="margin-top:16px">
+            <button class="btn btn-filled" id="btn-finish">End session &amp; get my receipt</button>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- 3 · RECEIPT -->
+    <!-- ── 3 · RECEIPT (3c) ─────────────────────────────────────────────── -->
     <section class="screen" id="scr-receipt">
-      <div class="crumb">Session over</div>
-      <h1>Your receipt</h1>
-      <p class="sub">Generated from what actually happened, not from what you meant to do.</p>
-
-      <div class="tiles" style="margin-top:20px">
-        <div class="tile"><div class="lbl">Focus score</div><div class="val" id="r-score">–</div><div class="sub">out of 100</div></div>
-        <div class="tile"><div class="lbl">Check-ins</div><div class="val" id="r-checks">–</div><div class="sub" id="r-drift">–</div></div>
-        <div class="tile"><div class="lbl">Words added</div><div class="val" id="r-words">–</div><div class="sub" id="r-quality">–</div></div>
-        <div class="tile"><div class="lbl">Elapsed</div><div class="val" id="r-elapsed">–</div><div class="sub">minutes</div></div>
-      </div>
-
-      <div class="card" style="margin-top:16px">
-        <h2>The session, end to end</h2>
-        <div class="tl" id="r-timeline"></div>
-        <div class="tl-legend">
-          <span class="k"><span class="sw" style="background:var(--good)"></span> on task</span>
-          <span class="k"><span class="sw" style="background:var(--serious)"></span> drift</span>
-          <span class="k"><span class="sw" style="background:var(--accent)"></span> work checked</span>
+      <div class="grid lead">
+        <div class="hero">
+          <div class="eyebrow">Focus score</div>
+          <div style="display:flex;align-items:baseline;gap:10px;margin-top:6px">
+            <span class="n" id="r-score">–</span><span class="delta" id="r-delta"></span>
+          </div>
+          <p id="r-autopsy">–</p>
+        </div>
+        <div class="streak-card">
+          <div class="eyebrow" id="r-streak-label">Sessions</div>
+          <div class="streak-days" id="r-streak"></div>
+          <p id="r-streak-note">A lapse is not a relapse — the streak carries on regardless.</p>
         </div>
       </div>
 
-      <div class="card">
-        <h2>Drift autopsy</h2>
-        <div class="autopsy" id="r-autopsy">–</div>
-        <div class="tomorrow"><div class="txt" id="r-tomorrow">–</div></div>
+      <div class="card flat">
+        <div class="row-between">
+          <div class="eyebrow">The session</div>
+          <span class="spacer"></span>
+          <span class="hint mono" id="r-span"></span>
+        </div>
+        <div class="timeline" id="r-timeline"></div>
+        <div class="legend">
+          <span class="k"><span class="sw" style="background:var(--primary)"></span><span id="lg-on">on task</span></span>
+          <span class="k"><span class="sw drift" style="background:repeating-linear-gradient(135deg,var(--outline-variant) 0 3px,var(--surface-container) 3px 6px)"></span><span id="lg-drift">drift</span></span>
+          <span class="k"><span class="sw" style="background:var(--primary-container)"></span><span id="lg-work">work checked</span></span>
+        </div>
       </div>
 
-      <div class="card">
-        <h2>What Heid Doon now knows about you</h2>
-        <p class="note" style="margin-top:0">Saved between sessions — this is what shapes tomorrow.</p>
-        <pre class="json" id="r-learner">–</pre>
+      <div class="card outline">
+        <div class="eyebrow" style="margin-bottom:16px">Drift autopsy</div>
+        <div class="autopsy" id="r-drift-list"></div>
       </div>
 
-      <div class="actions"><button class="btn btn-ghost" id="btn-again">Start another session</button></div>
+      <div class="grid two">
+        <div class="card flat">
+          <div class="eyebrow" style="margin-bottom:14px">Learner model · updated</div>
+          <div class="learner" id="r-learner"></div>
+        </div>
+        <div class="tomorrow">
+          <div class="eyebrow">Tomorrow · drafted</div>
+          <p id="r-tomorrow">–</p>
+          <div class="actions stack" style="margin-top:20px">
+            <button class="btn btn-filled block" id="btn-accept-tomorrow">Accept and schedule</button>
+            <button class="btn btn-outline block" id="btn-edit-rules">Edit the rules</button>
+          </div>
+        </div>
+      </div>
     </section>
 
-    <!-- 4 · HISTORY -->
+    <!-- ── 4 · HISTORY ──────────────────────────────────────────────────── -->
     <section class="screen" id="scr-history">
-      <div class="crumb">Across days</div>
-      <h1>History</h1>
-      <p class="sub">The part a one-session demo cannot show: what persists.</p>
-      <div class="card" style="margin-top:20px">
-        <h2>Recent sessions</h2>
-        <div id="h-sessions" class="feed"></div>
-      </div>
       <div class="card">
-        <h2>Learner model</h2>
-        <pre class="json" id="h-learner">–</pre>
+        <div class="eyebrow" style="margin-bottom:6px">Recent sessions</div>
+        <div id="h-sessions"></div>
+      </div>
+      <div class="card flat">
+        <div class="eyebrow" style="margin-bottom:14px">Learner model</div>
+        <div class="learner" id="h-learner"></div>
+      </div>
+    </section>
+
+    <!-- ── 5 · PRIVACY (3d) ─────────────────────────────────────────────── -->
+    <section class="screen" id="scr-privacy">
+      <h2 class="title">What Heid Doon keeps</h2>
+      <p class="body" style="margin-top:8px;max-width:640px" id="privacy-lede">…</p>
+
+      <div class="card" style="margin-top:20px">
+        <div class="kept">
+          <div class="row">
+            <svg class="ic"><use href="#i-trash"/></svg>
+            <span class="txt"><span class="name">Screen and camera frames</span>
+              <span class="desc" id="privacy-frames">…</span></span>
+            <span class="badge discarded">discarded</span>
+          </div>
+          <div class="row">
+            <svg class="ic"><use href="#i-doc"/></svg>
+            <span class="txt"><span class="name">Verdicts and word counts</span>
+              <span class="desc" id="privacy-db">…</span></span>
+            <span class="badge kept">kept</span>
+          </div>
+          <div class="row">
+            <svg class="ic"><use href="#i-cloud-off"/></svg>
+            <span class="txt"><span class="name">Network</span>
+              <span class="desc" id="privacy-network">…</span></span>
+            <span class="badge none" id="privacy-network-badge">none</span>
+          </div>
+        </div>
+
+        <div class="eyebrow" style="margin-top:20px">Verdict log · last three</div>
+        <div class="log" id="privacy-log"><span class="log-empty">No verdicts recorded yet.</span></div>
+
+        <div class="actions" style="margin-top:18px">
+          <button class="btn btn-filled" id="btn-export">
+            <svg class="ic sm"><use href="#i-download"/></svg>Export my data
+          </button>
+          <button class="btn btn-danger" id="btn-delete">Delete everything</button>
+        </div>
       </div>
     </section>
 
   </main>
+  </div>
 </div>
 
 <!-- nudge -->
-<div class="overlay" id="ov-nudge">
-  <div class="nudge-card">
-    <div class="avatar">👀</div>
-    <div class="nudge-tag">Drift caught</div>
-    <div class="nudge-line" id="nudge-line"></div>
-    <div class="nudge-why" id="nudge-seen"></div>
-    <div class="nudge-actions">
-      <button class="btn btn-primary" id="btn-backtoit">Right — back to it</button>
-      <button class="btn btn-ghost" id="btn-open-bouncer">Actually, I need a break</button>
+<div class="scrim" id="ov-nudge">
+  <div class="dialog">
+    <div class="head"><span class="pill-tag drift"><svg class="ic sm"><use href="#i-alert"/></svg>Drift</span></div>
+    <h2 id="nudge-line"></h2>
+    <p class="body" id="nudge-seen"></p>
+    <div class="actions end">
+      <button class="btn btn-text" id="btn-open-bouncer">I need a break</button>
+      <button class="btn btn-filled" id="btn-backtoit">Right — back to it</button>
     </div>
   </div>
 </div>
 
-<!-- bouncer -->
-<div class="overlay" id="ov-bouncer">
-  <div class="nudge-card bouncer">
-    <div class="avatar">🎟️</div>
-    <div class="nudge-tag" style="color:var(--accent)">The Bouncer</div>
-    <div class="nudge-line">One question, then the break is yours</div>
-    <div class="bouncer-q">
-      <div class="q" id="bouncer-question">…</div>
-      <div class="src">from your own notes</div>
+<!-- bouncer / checkpoint (3b) -->
+<div class="scrim" id="ov-bouncer">
+  <div class="dialog">
+    <div class="head">
+      <span class="pill-tag check"><svg class="ic sm"><use href="#i-ticket"/></svg>Checkpoint</span>
+      <span class="spacer" style="flex:1"></span>
+      <span class="hint mono" id="bouncer-source">from your own notes</span>
     </div>
-    <textarea id="bouncer-answer" rows="4" style="margin-top:12px" placeholder="From memory — a rough version of the idea is fine."></textarea>
-    <div class="grant hidden" id="grant-msg"></div>
-    <div class="nudge-actions">
-      <button class="btn btn-primary" id="btn-answer">Submit</button>
-      <button class="btn btn-ghost" id="btn-close-bouncer">Never mind</button>
+    <h2>Before you go — say this back without looking</h2>
+    <p class="body" id="bouncer-question">…</p>
+    <div class="field"><label for="bouncer-answer">Your answer</label>
+      <textarea id="bouncer-answer" rows="4" placeholder="From memory. A rough version of the idea counts."></textarea></div>
+    <div class="result hidden" id="bouncer-result">
+      <svg class="ic"><use href="#i-check"/></svg>
+      <div><div class="t" id="bouncer-result-title"></div><div class="d" id="bouncer-result-detail"></div></div>
+    </div>
+    <div class="actions end">
+      <button class="btn btn-text" id="btn-close-bouncer">Skip, I'm mid-thought</button>
+      <button class="btn btn-filled" id="btn-answer">Check</button>
+    </div>
+  </div>
+</div>
+
+<!-- break in progress (3b, the dark surface) -->
+<div class="scrim" id="ov-break">
+  <div class="dialog dark">
+    <div class="head">
+      <span class="pill-tag earned">Break · earned</span>
+      <span class="spacer" style="flex:1"></span>
+      <span class="paused">watching paused · nothing judged</span>
+    </div>
+    <div class="clock"><span class="n" id="break-clock">10:00</span><span class="of" id="break-of">of 10 minutes</span></div>
+    <div class="track"><span id="break-track" style="width:100%"></span></div>
+    <p class="body" id="break-line">Go and look out a window. I'll come and get you.</p>
+    <div class="actions">
+      <button class="btn btn-filled" id="btn-break-back">Back early</button>
+      <button class="btn btn-outline" id="btn-break-add">Add 3 minutes</button>
     </div>
   </div>
 </div>

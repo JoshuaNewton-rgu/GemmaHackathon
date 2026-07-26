@@ -224,3 +224,157 @@ class Store:
                 "updated_at = excluded.updated_at",
                 (profile, json.dumps(learner.to_dict()), time.time()),
             )
+
+    # ── the student's data is the student's ─────────────────────────────────
+    # "Monitoring you opted into" only means anything if you can also see all of
+    # it and take it away. Both of these are part of the product, not admin tools.
+
+    def recent_verdicts(self, *, profile: str = "default", limit: int = 3) -> list[dict[str, Any]]:
+        """The latest frame verdicts, for the privacy screen's log.
+
+        Shows the student exactly what was retained from looking at their screen:
+        a sentence, and nothing else.
+        """
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT e.at, e.kind, e.on_task, e.seen FROM events e JOIN sessions s ON s.id = e.session_id "
+                "WHERE s.profile = ? AND e.kind IN ('screen', 'camera') ORDER BY e.at DESC LIMIT ?",
+                (profile, limit),
+            ).fetchall()
+        return [
+            {
+                "at": row["at"],
+                "kind": row["kind"],
+                "on_task": None if row["on_task"] is None else bool(row["on_task"]),
+                "seen": row["seen"],
+            }
+            for row in rows
+        ]
+
+    def counts(self, *, profile: str = "default") -> dict[str, int]:
+        """What is actually on disk, for an honest privacy screen."""
+        with self._connect() as connection:
+            sessions = connection.execute(
+                "SELECT COUNT(*) AS n FROM sessions WHERE profile = ?", (profile,)
+            ).fetchone()["n"]
+            events = connection.execute(
+                "SELECT COUNT(*) AS n FROM events e JOIN sessions s ON s.id = e.session_id WHERE s.profile = ?",
+                (profile,),
+            ).fetchone()["n"]
+            snapshots = connection.execute(
+                "SELECT COUNT(*) AS n FROM snapshots p JOIN sessions s ON s.id = p.session_id "
+                "WHERE s.profile = ?",
+                (profile,),
+            ).fetchone()["n"]
+            # Counted separately from `events`: a frame verdict is the thing a
+            # student wants a number for on the privacy screen, and calling the
+            # diffs and quizzes "verdicts" there would overstate what was watched.
+            verdicts = connection.execute(
+                "SELECT COUNT(*) AS n FROM events e JOIN sessions s ON s.id = e.session_id "
+                "WHERE s.profile = ? AND e.kind IN ('screen', 'camera')",
+                (profile,),
+            ).fetchone()["n"]
+        return {
+            "sessions": int(sessions),
+            "events": int(events),
+            "snapshots": int(snapshots),
+            "verdicts": int(verdicts),
+        }
+
+    def export_all(self, *, profile: str = "default") -> dict[str, Any]:
+        """Everything held about this student, in one JSON-serialisable object.
+
+        Note what cannot appear here however hard you look: a frame. Snapshots of
+        the contracted file are included because they are the student's own
+        writing and they asked for their data.
+        """
+        with self._connect() as connection:
+            sessions = connection.execute(
+                "SELECT * FROM sessions WHERE profile = ? ORDER BY started_at", (profile,)
+            ).fetchall()
+            session_ids = [row["id"] for row in sessions]
+            events = (
+                connection.execute(
+                    f"SELECT * FROM events WHERE session_id IN ({','.join('?' * len(session_ids))}) ORDER BY at",
+                    session_ids,
+                ).fetchall()
+                if session_ids
+                else []
+            )
+            snapshots = (
+                connection.execute(
+                    f"SELECT id, session_id, path, at, sha256, content FROM snapshots "
+                    f"WHERE session_id IN ({','.join('?' * len(session_ids))}) ORDER BY at",
+                    session_ids,
+                ).fetchall()
+                if session_ids
+                else []
+            )
+
+        return {
+            "exported_at": time.time(),
+            "profile": profile,
+            "note": "Verdicts, note snapshots and the learner model. No frame is stored by Heid Doon.",
+            "learner_model": self.get_learner(profile=profile).to_dict(),
+            "sessions": [
+                {
+                    "id": row["id"],
+                    "started_at": row["started_at"],
+                    "ended_at": row["ended_at"],
+                    "contract": json.loads(row["contract_json"]),
+                    "receipt": json.loads(row["receipt_json"]) if row["receipt_json"] else None,
+                }
+                for row in sessions
+            ],
+            "events": [
+                {
+                    "session_id": row["session_id"],
+                    "at": row["at"],
+                    "kind": row["kind"],
+                    "on_task": None if row["on_task"] is None else bool(row["on_task"]),
+                    "seen": row["seen"],
+                    "detail": json.loads(row["detail_json"]),
+                }
+                for row in events
+            ],
+            "artifact_snapshots": [
+                {
+                    "session_id": row["session_id"],
+                    "path": row["path"],
+                    "at": row["at"],
+                    "sha256": row["sha256"],
+                    "content": row["content"],
+                }
+                for row in snapshots
+            ],
+        }
+
+    def delete_all(self, *, profile: str = "default") -> dict[str, int]:
+        """Erase everything for this profile. Returns what was removed.
+
+        No soft delete, no tombstones, no "archived" flag. The student was told
+        they could delete it, so it is gone.
+        """
+        removed = self.counts(profile=profile)
+        with self._connect() as connection:
+            connection.execute(
+                "DELETE FROM events WHERE session_id IN (SELECT id FROM sessions WHERE profile = ?)",
+                (profile,),
+            )
+            connection.execute(
+                "DELETE FROM snapshots WHERE session_id IN (SELECT id FROM sessions WHERE profile = ?)",
+                (profile,),
+            )
+            connection.execute("DELETE FROM sessions WHERE profile = ?", (profile,))
+            connection.execute("DELETE FROM learner WHERE profile = ?", (profile,))
+
+        # VACUUM cannot run inside a transaction, and sqlite3 opens one implicitly
+        # for the DELETEs above — so it gets its own autocommit connection. Worth
+        # doing rather than skipping: without it the deleted rows stay legible in
+        # the file's free pages, and "delete everything" should mean it.
+        vacuum = sqlite3.connect(self.path, isolation_level=None)
+        try:
+            vacuum.execute("VACUUM")
+        finally:
+            vacuum.close()
+        return removed
