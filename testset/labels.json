@@ -1,7 +1,7 @@
 {
   "_readme": [
-    "Labelled frames for the verdict eval. Contract: compilers — lexical analysis",
-    "and tokenisation (see contract.json). The labels only make sense against that",
+    "Labelled frames for the verdict eval. Contract: algorithms — sorting and Big-O",
+    "notation (see contract.json). The labels only make sense against that",
     "contract, so if the contract changes topic these must change with it.",
     "",
     "'source' is load-bearing — the harness scores the two kinds separately:",
@@ -16,19 +16,19 @@
 
   "editor_notes.png": {"on_task": true,  "kind": "screen", "case": "easy", "source": "synthetic", "note": "their own notes file open in an editor"},
   "pdf_notes.png":    {"on_task": true,  "kind": "screen", "case": "easy", "source": "synthetic", "note": "the correct module's lecture PDF"},
-  "yt_lecture.png":   {"on_task": true,  "kind": "screen", "case": "hard", "source": "synthetic", "note": "video site BUT a compilers lecture — title-blockers fail this"},
+  "yt_lecture.png":   {"on_task": true,  "kind": "screen", "case": "hard", "source": "synthetic", "note": "video site BUT a sorting lecture — title-blockers fail this"},
   "yt_cats.png":      {"on_task": false, "kind": "screen", "case": "easy", "source": "synthetic", "note": "same video site, entertainment"},
   "social_feed.png":  {"on_task": false, "kind": "screen", "case": "easy", "source": "synthetic", "note": "social feed"},
-  "wrong_pdf.png":    {"on_task": false, "kind": "screen", "case": "hard", "source": "synthetic", "note": "a lecture PDF — but for biology, not compilers"},
-  "chat_class.png":   {"on_task": true,  "kind": "screen", "case": "hard", "source": "synthetic", "note": "chat app — but the channel is discussing maximal munch"},
+  "wrong_pdf.png":    {"on_task": false, "kind": "screen", "case": "hard", "source": "synthetic", "note": "a lecture PDF — but for biology, not algorithms"},
+  "chat_class.png":   {"on_task": true,  "kind": "screen", "case": "hard", "source": "synthetic", "note": "chat app — but the channel is discussing merge sort complexity"},
 
-  "real_notes_editor.png":     {"on_task": true,  "kind": "screen", "case": "easy", "source": "real", "note": "CAPTURE: your editor with your real tokenisation notes open"},
-  "real_lecture_video.png":    {"on_task": true,  "kind": "screen", "case": "hard", "source": "real", "note": "CAPTURE: a real compilers/lexing lecture playing on a real video site"},
+  "real_notes_editor.png":     {"on_task": true,  "kind": "screen", "case": "easy", "source": "real", "note": "CAPTURE: your editor with your real sorting notes open"},
+  "real_lecture_video.png":    {"on_task": true,  "kind": "screen", "case": "hard", "source": "real", "note": "CAPTURE: a real sorting/Big-O lecture playing on a real video site"},
   "real_entertainment.png":    {"on_task": false, "kind": "screen", "case": "easy", "source": "real", "note": "CAPTURE: a real entertainment video page"},
   "real_social_feed.png":      {"on_task": false, "kind": "screen", "case": "easy", "source": "real", "note": "CAPTURE: a real social feed"},
   "real_wrong_module_pdf.png": {"on_task": false, "kind": "screen", "case": "hard", "source": "real", "note": "CAPTURE: a real PDF for a DIFFERENT module"},
   "real_class_chat.png":       {"on_task": true,  "kind": "screen", "case": "hard", "source": "real", "note": "CAPTURE: real chat that is about the coursework"},
-  "real_docs_search.png":      {"on_task": true,  "kind": "screen", "case": "hard", "source": "real", "note": "CAPTURE: regex or language docs, or a search for 'maximal munch'"},
+  "real_docs_search.png":      {"on_task": true,  "kind": "screen", "case": "hard", "source": "real", "note": "CAPTURE: Python docs on list.sort, or a search for 'merge sort time complexity'"},
   "real_shopping.png":         {"on_task": false, "kind": "screen", "case": "hard", "source": "real", "note": "CAPTURE: a shopping or news page — off task, but not a classic blocked site"},
 
   "real_at_desk.jpg":       {"on_task": true,  "kind": "camera", "case": "easy", "source": "real", "note": "CAPTURE: webcam, you working at the desk"},

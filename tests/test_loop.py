@@ -687,8 +687,8 @@ class TestPaperNotes:
         from heiddoon.schemas import Verdict
 
         written = (
-            "Maximal munch takes the longest lexeme at each position, so >= lexes as one "
-            "token rather than > followed by =, and ties are broken by rule order."
+            "Merge sort halves the list at each step, giving log n levels, and each level "
+            "merges all n items, so the total work is n log n."
         )
         monkeypatch.setattr(
             verdict_mod,
@@ -700,7 +700,7 @@ class TestPaperNotes:
         assert session.store.latest_snapshot(session.id, SCREEN_WORK_PATH)["content"] == written
         quiz = session.request_break()
         assert quiz.source == "your own notes"
-        assert "Maximal munch" in session.provider.calls[-1]
+        assert "Merge sort" in session.provider.calls[-1]
 
     def test_typing_produces_a_progress_verdict_on_its_own(self, session, monkeypatch):
         """The complaint this answers: writing was read but never judged.
@@ -712,8 +712,8 @@ class TestPaperNotes:
         from heiddoon.schemas import Verdict
 
         pages = iter([
-            "Maximal munch takes the longest lexeme at each position rather than the first match found",
-            "Maximal munch takes the longest lexeme at each position rather than the first match found "
+            "Merge sort halves the list at each step so there are log n levels of n work",
+            "Merge sort halves the list at each step so there are log n levels of n work "
             + " ".join(f"new{n}" for n in range(60)),
         ])
         monkeypatch.setattr(

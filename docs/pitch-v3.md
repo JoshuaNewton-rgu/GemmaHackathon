@@ -187,14 +187,38 @@ python -m heiddoon eval            # confirm your real number one last time
 pytest -q                          # 84 passed — a nice thing to have on screen if asked
 ```
 
-Then set the demo cadence — **the defaults are tuned for real use, which is far too patient for a stage:**
+Then switch on demo mode. **The defaults are tuned for real use, which is far too patient for a stage:**
 
 ```bash
-HEIDDOON_AUTO_CADENCE_S=25         # 60s of silence is death in a live demo (15s verdicts, so not lower)
+HEIDDOON_WRITE_NUDGE=0             # model-free nudge line: drift verdict 35-112s -> 14s
+HEIDDOON_FAST_GRADE=1              # key-point grading: break answers 35s -> instant
+HEIDDOON_AUTO_CADENCE_S=25         # 60s of silence is death on stage
+HEIDDOON_PROGRESS_EVERY_MIN=0      # check work every cycle instead of every 5 min
 HEIDDOON_NOTES_PROMPT_EVERY_MIN=1  # forces the "show me your page" card to appear
 ```
 
-**Put both back before you submit or record anything.** A 1-minute page prompt is exactly the pestering the app is designed not to do, and someone will notice.
+None of these fake anything. `WRITE_NUDGE=0` uses the model-free line, which quotes your own
+stated reason back at you — the same thing the prompt asks the model to do, and on a live run the
+two were nearly identical. `FAST_GRADE=1` uses key-point overlap, the same path taken when the
+model is unreachable; the pass/fail is unchanged, only the warmth of the feedback is lost.
+
+**Put them all back before you submit or record anything.** A 1-minute page prompt is exactly the
+pestering the app is designed not to do, and someone will notice.
+
+### Measured, on this hosted backend
+
+| Beat | Default | Demo mode |
+|---|---|---|
+| Frame that stays silent | 15–35s | unchanged — this is perception, and it cannot be hurried |
+| **Frame that nudges** | **35–112s** | **~14s** |
+| Work-diff verdict | ~4s | ~4s — the fastest visible beat you have; use it while something else loads |
+| Break question | ~30s | **instant** — prefetched as soon as you produce work |
+| Grading an answer | ~35s | **instant** |
+| Contract compile | ~4s | ~4s |
+
+Gemma 4 reasons before answering on this endpoint and the thinking budget cannot be set to zero,
+which is why a one-sentence nudge cost up to 77 seconds. That is also the honest answer if a judge
+asks why it feels slow.
 
 Physical checklist:
 - [ ] Two browser tabs pre-loaded and paused: **thermo lecture** and **cat compilation**. Pre-loaded. Not "I'll search for it."

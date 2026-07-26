@@ -13,7 +13,7 @@ You can hide a phone from a camera. You can't hide an empty page.
 One session: **Contract → Watch → Intervene → Negotiate → Checkpoint → Receipt → Adapt.**
 
 You write a contract in your own words — what you're studying, why it matters, what counts as
-on-task for *you*, and which file you're working in. Then four signals feed one loop:
+on-task for *you*, and which file you're working in. Then six signals feed one loop:
 
 | Signal | Answers | Cost |
 |---|---|---|
@@ -22,12 +22,12 @@ on-task for *you*, and which file you're working in. Then four signals feed one 
 | **Artifact** | Did the work actually move? | one text call, only when the file changed |
 | **Your writing** | What are you actually writing, and is it growing? | free — read from the screen frame already being judged |
 | **Page** | What is on your paper notes, and has it grown? | one vision call, at most once per interval |
+| **Idle** | Are you at the machine at all? | free — no model |
 
-The bundled contract and test set are set up for **compilers — lexical analysis and
-tokenisation**. `testset/labels.json` labels frames against `contract.json`, so the two
+The bundled contract and test set are set up for **algorithms — sorting and Big-O
+notation**. `testset/labels.json` labels frames against `contract.json`, so the two
 have to change topic together; `python testset/make_synthetic.py` regenerates the
 synthetic frames if you re-theme it.
-| **Idle** | Are you at the machine at all? | free — no model |
 
 The screen signal runs **automatically** once a session starts. You do not press
 anything to be watched, and it runs server-side so it keeps working while the app is
@@ -117,8 +117,8 @@ that's permanently a minute behind.
 ## Use it
 
 ```bash
-python -m heiddoon contract "Two hours on compilers — tokenisation. Lecture videos, the course
-PDFs and regex docs are fine, no social media. Track notes_tokenising.md. Camera on."   --out contract.json
+python -m heiddoon contract "Two hours on algorithms — sorting and Big-O. Lecture videos, the
+course PDFs and the Python docs are fine, no social media. Track notes_sorting.md. Camera on."   --out contract.json
 
 python -m heiddoon serve            # the web app on http://127.0.0.1:8000
 python -m heiddoon watch            # the local watcher, against your real screen
@@ -179,7 +179,7 @@ heiddoon/
   evaluate.py    the eval, which refuses to report unquotable numbers
   server.py      HTTP over the same Session the watcher uses
   web/           the front end
-tests/           42 tests, no network, no model, no GPU
+tests/           152 tests, no network, no model, no GPU
 ```
 
 ## Known limits
@@ -191,6 +191,6 @@ tests/           42 tests, no network, no model, no GPU
 - **Idle detection is Windows-only** so far. Elsewhere it returns 0, which means "assume they're
   here" — the safe direction.
 - **The diff can be gamed** by typing filler into your own notes. At which point the model flags
-  padding, and you are, at minimum, typing about tokenisation.
+  padding, and you are, at minimum, typing about sorting algorithms.
 - Screen *perception* has prior art (Rewind, Screenpipe). The contribution here is the behavioural
   loop for learners, not the perception.

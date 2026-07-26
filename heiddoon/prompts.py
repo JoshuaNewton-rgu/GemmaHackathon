@@ -73,7 +73,7 @@ Schema:
   "nudge": str,         // the line, or "" if on task
   "confidence": "low"|"medium"|"high",
   "work_text": str,     // their own visible writing, or "" if the frame shows none
-  "work_source": str}}  // where it is, e.g. "notes_tokenising.md in the editor"; "" if none"""
+  "work_source": str}}  // where it is, e.g. "notes_sorting.md in the editor"; "" if none"""
 
 
 PERCEIVE = """You are the perception layer of a study companion. You do not decide
@@ -114,7 +114,7 @@ Schema:
   "seen": str,          // what is actually in the frame, concretely
   "reason": str,        // one line on why topic_match got the number it did
   "work_text": str,     // their own visible writing, or ""
-  "work_source": str}}  // where it is, e.g. "notes_tokenising.md in the editor"; "" if none"""
+  "work_source": str}}  // where it is, e.g. "notes_sorting.md in the editor"; "" if none"""
 
 
 ARTIFACT_DIFF = """Two snapshots of a student's working file, taken {minutes} minutes apart.

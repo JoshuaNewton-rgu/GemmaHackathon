@@ -117,18 +117,18 @@ def chat_page(path: Path) -> None:
     img = Image.new("RGB", (W, H), (49, 51, 56))
     d = ImageDraw.Draw(img)
     d.rectangle([0, 0, 230, H], fill=(43, 45, 49))
-    d.text((18, 18), "CS3101 Compilers", font=_font(14, True), fill=(220, 220, 220))
-    for i, ch in enumerate(["# general", "# coursework-2", "# lexer-help", "# social"]):
+    d.text((18, 18), "CS1015 Algorithms", font=_font(14, True), fill=(220, 220, 220))
+    for i, ch in enumerate(["# general", "# coursework-2", "# sorting-help", "# social"]):
         d.text((18, 58 + i * 30), ch, font=_font(13), fill=(140, 220, 160) if i == 2 else (150, 152, 157))
-    d.text((250, 18), "# lexer-help", font=_font(16, True), fill=(235, 235, 235))
+    d.text((250, 18), "# sorting-help", font=_font(16, True), fill=(235, 235, 235))
     d.line([250, 46, 1000, 46], fill=(60, 62, 68))
 
     msgs = [
-        ("callum", "is anyone else stuck on maximal munch for the >= case"),
-        ("me", "yeah — mine lexes it as > then = so the parser dies"),
-        ("priya", "you need longest-match at each position, not first-match"),
-        ("priya", "and declare KEYWORD before IDENT or `while` comes back as an ident"),
-        ("callum", "ohhh that is why my keywords vanished. cheers"),
+        ("callum", "where does the log n in merge sort actually come from"),
+        ("me", "the splitting — you halve the list each time so 8 items is 3 levels"),
+        ("priya", "and each level merges all n items, so it is n per level x log n levels"),
+        ("priya", "bubble sort has no halving, it is n passes of n comparisons = n squared"),
+        ("callum", "ohhh so the log is the splitting and the n is the merging. cheers"),
     ]
     y = 68
     for who, text in msgs:
@@ -145,26 +145,26 @@ def editor_page(path: Path) -> None:
     img = Image.new("RGB", (W, H), (30, 30, 30))
     d = ImageDraw.Draw(img)
     d.rectangle([0, 0, W, 34], fill=(60, 60, 60))
-    d.text((14, 9), "notes_tokenising.md — heid-doon", font=_font(12), fill=(220, 220, 220))
+    d.text((14, 9), "notes_sorting.md — heid-doon", font=_font(12), fill=(220, 220, 220))
     d.rectangle([0, 34, 210, H], fill=(37, 37, 38))
-    for i, name in enumerate(["notes_tokenising.md", "lexer.py", "tokens.py", "tests/"]):
+    for i, name in enumerate(["notes_sorting.md", "bubble_sort.py", "merge_sort.py", "tests/"]):
         d.text((16, 52 + i * 26), name, font=_font(12), fill=(255, 255, 255) if i == 0 else (160, 160, 160))
 
     lines = [
-        "# Compilers — lexical analysis (tokenisation)",
+        "# Algorithms — sorting and Big-O",
         "",
-        "## Maximal munch (longest-match rule)",
-        "At each position take the LONGEST lexeme matching any pattern.",
-        "Without it `>=` lexes as `>` then `=`.",
+        "## Bubble sort is O(n^2)",
+        "n passes, and each pass makes up to n comparisons.",
+        "A loop inside a loop, so the work grows with n squared.",
         "",
-        "### Worked example — x>=42",
-        "  pos 0  ->  IDENT(\"x\")",
-        "  pos 1  ->  OP(GE)      # `>=`, not `>`",
-        "  pos 3  ->  INT(42)     # `42`, not `4`",
+        "### Worked example — [5, 1, 4, 2]",
+        "  pass 1  ->  [1, 4, 2, 5]   # 3 swaps",
+        "  pass 2  ->  [1, 2, 4, 5]   # 1 swap",
+        "  pass 3  ->  [1, 2, 4, 5]   # 0 swaps, still checks",
         "",
-        "## Ties broken by rule order",
-        "`while` matches KEYWORD and IDENT, both length 5.",
-        "KEYWORD is declared first, so keywords survive.",
+        "## Merge sort is O(n log n)",
+        "Halving the list gives log n levels.",
+        "Merging touches all n items per level. n x log n.",
     ]
     y = 56
     for i, line in enumerate(lines):
@@ -183,10 +183,10 @@ def editor_page(path: Path) -> None:
 def main() -> None:
     video_page(
         HERE / "yt_lecture.png",
-        search="lexical analysis tokenisation",
-        title="Compilers: Lexical Analysis — Tokens, Lexemes and Maximal Munch (Lecture 4)",
-        channel="Stanford-style CS Compilers",
-        blurb="1.4M views · regex to NFA to DFA, longest-match rule, worked examples",
+        search="merge sort vs bubble sort big o",
+        title="Sorting Algorithms: Bubble Sort vs Merge Sort — Why O(n log n) Wins (Lecture 4)",
+        channel="CS Foundations",
+        blurb="1.4M views · Big-O from first principles, worked traces, comparison counts",
     )
     video_page(
         HERE / "yt_cats.png",
@@ -197,20 +197,20 @@ def main() -> None:
     )
     pdf_page(
         HERE / "pdf_notes.png",
-        filename="cs3101_lec04_lexical_analysis.pdf",
-        heading="4. Lexical Analysis and Tokenisation",
+        filename="cs1015_lec04_sorting_and_big_o.pdf",
+        heading="4. Sorting Algorithms and Big-O Notation",
         lines=[
-            "A lexer maps a character stream to a token stream.",
-            "Each token is a triple: (kind, lexeme, position).",
+            "Big-O describes how the work grows with the input size n.",
+            "Constant factors are dropped: 2n and n are both O(n).",
             "",
-            "4.1 Patterns as regular expressions",
-            "  IDENT   ::= [A-Za-z_][A-Za-z0-9_]*",
-            "  INT     ::= [0-9]+",
-            "  OP_GE   ::= >=",
+            "4.1 Bubble sort",
+            "  for i in range(n):",
+            "      for j in range(n - 1):",
+            "          if a[j] > a[j+1]: swap(a, j, j+1)",
             "",
-            "4.2 The longest-match rule (maximal munch)",
-            "At each position, prefer the longest matching lexeme.",
-            "Ties are resolved by the order the rules are declared.",
+            "4.2 Why bubble sort is O(n^2) and merge sort is O(n log n)",
+            "Merge sort halves the list, giving log n levels of n work.",
+            "At n = 1000 that is 10,000 comparisons against 1,000,000.",
         ],
     )
     pdf_page(

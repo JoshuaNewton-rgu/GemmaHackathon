@@ -296,7 +296,7 @@ class TestInterpretableSession:
         monkeypatch.setattr(decide_mod.perceive_mod, "perceive", lambda *a, **k: (perception, meta))
         monkeypatch.setattr(decide_mod, "write_nudge", lambda *a, **k: "a written line")
 
-        contract = Contract(task="compilers — tokenisation", why="coursework Friday", signals=["screen"])
+        contract = Contract(task="algorithms — sorting and Big-O", why="coursework Friday", signals=["screen"])
         settings = Settings(db_path=tmp_path / "fuzzy.db", interpretable=True)
         return Session(provider, contract, store=store, settings=settings)
 
