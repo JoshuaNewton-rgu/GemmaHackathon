@@ -17,6 +17,9 @@ const state = {
   breakEndsAt: null,
   breakTotal: 0,
   serverCapture: false,
+  autopilot: false,
+  autoCadence: 60,
+  pageCamStream: null,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -74,6 +77,9 @@ function forgetSession() {
   $("feed").innerHTML = '<div class="feed-empty">Nothing yet.</div>';
   $("verdict-count").textContent = "";
   $("status-text").textContent = "idle";
+  state.autopilot = false;
+  $("auto-toggle").classList.remove("on");
+  hidePageAsk();
 }
 
 /* Long model calls are the normal case here, not the exception — a vision call
@@ -133,6 +139,7 @@ async function loadStatus() {
     // Say which screen the button is about to read — the server's, or whichever
     // window the browser picker offers.
     state.serverCapture = !!status.server_capture;
+    state.autoCadence = status.auto_cadence_s || 60;
     $("capture-hint").textContent = state.serverCapture
       ? "Grabs this machine's screen as it is right now, judges it, and drops it. No dialog, nothing stored."
       : "Asks which window or screen to share, grabs one frame, and stops. Nothing keeps watching.";
@@ -257,6 +264,10 @@ $("btn-start").addEventListener("click", async (event) => {
     startClock();
     show("watch");
     $("status-text").textContent = "watching";
+    // On by default. Being watched should not require a second decision after
+    // the one the student already made by starting a session.
+    state.autopilot = true;
+    await setAutopilot(true, { quiet: true });
   } catch (error) {
     snack(`Could not start: ${error.message}`, true);
   } finally { done(); }
@@ -291,6 +302,9 @@ function subscribe(sessionId) {
 }
 
 function addFeedRow(event) {
+  // A request for a page is not something that happened to the student's focus,
+  // so it belongs in the card, not in the verdict log.
+  if (event.kind === "ask_notes") return;
   const feed = $("feed");
   feed.querySelector(".feed-empty")?.remove();
 
@@ -327,6 +341,7 @@ function addFeedRow(event) {
 
   feed.prepend(row);
 
+  if (event.kind === "ask_notes") { showPageAsk(detail.prompt); return; }
   if (event.on_task === false && (detail.nudge || "").length) showNudge(detail.nudge, event.seen);
 }
 
@@ -459,6 +474,133 @@ $("btn-snap").addEventListener("click", async (event) => {
   }
 });
 
+/* ── autopilot: watching without being asked to ─────────────────────────── */
+
+async function setAutopilot(enabled, { quiet = false } = {}) {
+  if (!state.sessionId) return;
+  try {
+    const { autopilot } = await api(`/api/session/${state.sessionId}/autopilot`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled }),
+    });
+    state.autopilot = enabled && autopilot.running;
+    paintAutopilot(autopilot);
+  } catch (error) {
+    state.autopilot = false;
+    $("auto-toggle").classList.remove("on");
+    $("auto-desc").textContent = "Not available — check frames yourself below";
+    if (!quiet) snack(error.message, true);
+  }
+}
+
+function paintAutopilot(autopilot) {
+  $("auto-toggle").classList.toggle("on", state.autopilot);
+  $("auto-desc").textContent = state.autopilot
+    ? `Checking the screen every ${state.autoCadence}s on its own`
+    : "Paused — nothing is being looked at";
+  if (autopilot && (autopilot.checks || autopilot.skipped_unchanged)) {
+    $("auto-stats").textContent =
+      `${autopilot.checks} judged · ${autopilot.skipped_unchanged} skipped as unchanged`;
+  }
+}
+
+$("auto-toggle").addEventListener("click", () => setAutopilot(!state.autopilot));
+
+/* Poll the loop's counters occasionally. The verdicts themselves arrive over the
+   event stream — this is only the "is it alive" line. */
+setInterval(async () => {
+  if (!state.sessionId || !state.autopilot) return;
+  try {
+    const { autopilot } = await api(`/api/session/${state.sessionId}/autopilot`);
+    state.autopilot = autopilot.running;
+    paintAutopilot(autopilot);
+    if (autopilot.last_error) $("auto-desc").textContent = autopilot.last_error;
+  } catch { /* a hiccup here is not worth a message */ }
+}, 15000);
+
+/* ── the page request ───────────────────────────────────────────────────── */
+
+function showPageAsk(line) {
+  if (line) $("page-ask-line").textContent = line;
+  $("page-ask").classList.remove("hidden");
+}
+
+function hidePageAsk() {
+  $("page-ask").classList.add("hidden");
+  stopPageCam();
+}
+
+/* "Not now" is a real answer. It closes the card and does not count against
+   anything — the next ask is on the normal interval, and nothing is logged. */
+$("btn-page-later").addEventListener("click", hidePageAsk);
+
+function stopPageCam() {
+  if (state.pageCamStream) {
+    state.pageCamStream.getTracks().forEach((track) => track.stop());
+    state.pageCamStream = null;
+  }
+  $("page-cam").classList.add("hidden");
+  $("page-shoot-actions").classList.add("hidden");
+}
+
+$("btn-page-camera").addEventListener("click", async () => {
+  try {
+    // Prefer the rear camera on a phone: this is a photo of a notebook on a desk,
+    // not a selfie.
+    state.pageCamStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: "environment" } },
+    });
+    $("page-cam").srcObject = state.pageCamStream;
+    $("page-cam").classList.remove("hidden");
+    $("page-shoot-actions").classList.remove("hidden");
+  } catch (error) {
+    snack(`No camera: ${error.message} — upload a photo instead`, true);
+  }
+});
+
+$("btn-page-cancel").addEventListener("click", stopPageCam);
+$("btn-page-upload").addEventListener("click", () => $("page-file").click());
+$("page-file").addEventListener("change", (event) => {
+  const file = event.target.files[0];
+  if (file) readPage(file, null);
+  event.target.value = "";
+});
+
+$("btn-page-shoot").addEventListener("click", async (event) => {
+  if (!state.pageCamStream) return;
+  try {
+    await readPage(await grabStill(state.pageCamStream), event.target);
+  } catch (error) {
+    snack(`Could not take that photo: ${error.message}`, true);
+  }
+});
+
+async function readPage(blob, button) {
+  const done = withBusy(button, "reading your page");
+  try {
+    const form = new FormData();
+    form.append("file", blob, "page.jpg");
+    const result = await api(`/api/session/${state.sessionId}/notes-photo`, {
+      method: "POST",
+      body: form,
+    });
+    if (!result.ok) {
+      // A bad photo is not a failure on their part, and not an event either.
+      snack(result.problem, true);
+      return;
+    }
+    hidePageAsk();
+    if (result.baseline) {
+      snack(`Got it — ${result.page_note || "page read"}. I will compare the next one against this.`);
+    } else if (result.diff) {
+      snack(`${result.diff.verdict} — ${result.diff.summary}`);
+    }
+  } catch (error) {
+    snack(`Could not read that page: ${error.message}`, true);
+  } finally { done(); }
+}
+
 /* ── work-diff ──────────────────────────────────────────────────────────── */
 
 function renderArtifactButton(artifacts) {
@@ -539,18 +681,20 @@ $("btn-close-bouncer").addEventListener("click", () => $("ov-bouncer").classList
 
 async function askForBreak() {
   if (!state.sessionId) { snack("Start a session first.", true); return; }
-  $("bouncer-question").textContent = "…";
+  $("bouncer-question").textContent = "Thinking of something to ask you…";
+  $("bouncer-source").textContent = "";
   $("bouncer-result").classList.add("hidden");
   $("bouncer-answer").value = "";
   $("ov-bouncer").classList.add("open");
   try {
     const notes = $("diff-after").value.trim() || null;
-    const { question } = await api(`/api/session/${state.sessionId}/break`, {
+    const { question, source } = await api(`/api/session/${state.sessionId}/break`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ notes }),
     });
     $("bouncer-question").textContent = question;
+    $("bouncer-source").textContent = `from ${source || "your own notes"}`;
   } catch (error) {
     $("bouncer-question").textContent = "Could not think of a question just now.";
     snack(error.message, true);
@@ -576,6 +720,7 @@ $("btn-answer").addEventListener("click", async (event) => {
 });
 
 function startBreak(minutes) {
+  setBreakState(true);
   state.breakTotal = minutes;
   state.breakEndsAt = Date.now() + minutes * 60000;
   $("break-of").textContent = `of ${minutes} minutes`;
@@ -598,6 +743,20 @@ function endBreak() {
   clearInterval(state.breakTimer);
   state.breakTimer = null;
   $("ov-break").classList.remove("open");
+  setBreakState(false);
+}
+
+/* An earned break should be undisturbed, so the session stops asking for anything
+   until it is over. */
+async function setBreakState(onBreak) {
+  if (!state.sessionId) return;
+  try {
+    await api(`/api/session/${state.sessionId}/break-state`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ on_break: onBreak }),
+    });
+  } catch { /* the break still works if this does not land */ }
 }
 $("btn-break-back").addEventListener("click", endBreak);
 $("btn-break-add").addEventListener("click", () => {

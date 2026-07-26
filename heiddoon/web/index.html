@@ -162,25 +162,61 @@
           </div>
 
           <div class="card">
-            <h3 class="sub" style="margin-bottom:12px">Judge a frame</h3>
-            <div class="actions pair">
-              <button class="btn btn-filled sm" id="btn-screenshot">
-                <svg class="ic sm"><use href="#i-screen"/></svg>My screen
-              </button>
-              <button class="btn btn-tonal sm" id="btn-webcam">
-                <svg class="ic sm"><use href="#i-camera"/></svg>Webcam
-              </button>
-              <button class="btn btn-tonal sm hidden" id="btn-snap">Snap &amp; judge</button>
-            </div>
-            <p class="hint" style="margin-top:8px" id="capture-hint">
-              Capturing asks which window or screen to share, grabs one frame, and stops. Nothing keeps watching.
+            <button class="signal on" id="auto-toggle" style="padding:4px 0">
+              <svg class="ic"><use href="#i-eye"/></svg>
+              <span class="txt"><span class="name">Watch automatically</span>
+                <span class="desc" id="auto-desc">Checking the screen on its own</span></span>
+              <span class="switch"><span class="knob"></span></span>
+            </button>
+            <p class="hint" style="margin-top:10px" id="auto-stats">
+              Unchanged screens are skipped, so reading one page costs nothing.
             </p>
-            <input type="file" id="frame-file" accept="image/*" class="hidden">
-            <div class="dropzone" id="dropzone" style="margin-top:12px">
-              <svg class="ic" style="color:var(--on-surface-dim)"><use href="#i-upload"/></svg>
-              <div style="margin-top:6px">…or drop an image, or click to choose</div>
+            <details style="margin-top:12px">
+              <summary class="hint" style="cursor:pointer">Check something now</summary>
+              <div class="actions pair" style="margin-top:10px">
+                <button class="btn btn-tonal sm" id="btn-screenshot">
+                  <svg class="ic sm"><use href="#i-screen"/></svg>My screen
+                </button>
+                <button class="btn btn-tonal sm" id="btn-webcam">
+                  <svg class="ic sm"><use href="#i-camera"/></svg>Webcam
+                </button>
+                <button class="btn btn-tonal sm hidden" id="btn-snap">Snap &amp; judge</button>
+              </div>
+              <p class="hint" style="margin-top:8px" id="capture-hint"></p>
+              <input type="file" id="frame-file" accept="image/*" class="hidden">
+              <div class="dropzone" id="dropzone" style="margin-top:10px">
+                <svg class="ic" style="color:var(--on-surface-dim)"><use href="#i-upload"/></svg>
+                <div style="margin-top:6px">…or drop an image</div>
+              </div>
+              <video id="webcam" class="hidden" autoplay playsinline muted></video>
+            </details>
+          </div>
+
+          <!-- The page request. A card, never a modal: it waits for a natural stop
+               rather than taking one. -->
+          <div class="card hidden" id="page-ask" style="border-color:var(--tertiary-outline)">
+            <div class="row-between" style="margin-bottom:8px">
+              <span class="pill-tag check"><svg class="ic sm"><use href="#i-doc"/></svg>Your page</span>
             </div>
-            <video id="webcam" class="hidden" autoplay playsinline muted></video>
+            <p class="body tight" id="page-ask-line">
+              Whenever you get to a natural stop — hold your page up and I will read where you are.
+            </p>
+            <div class="actions" style="margin-top:12px">
+              <button class="btn btn-filled sm" id="btn-page-camera">
+                <svg class="ic sm"><use href="#i-camera"/></svg>Show my page
+              </button>
+              <button class="btn btn-text sm" id="btn-page-later">Not now</button>
+            </div>
+            <video id="page-cam" class="hidden" autoplay playsinline muted></video>
+            <div class="actions hidden" id="page-shoot-actions" style="margin-top:10px">
+              <button class="btn btn-filled sm" id="btn-page-shoot">Read this page</button>
+              <button class="btn btn-text sm" id="btn-page-cancel">Cancel</button>
+            </div>
+            <input type="file" id="page-file" accept="image/*" class="hidden">
+            <p class="hint" style="margin-top:10px">
+              The photo is transcribed, compared with your last page, then dropped.
+              <button class="btn btn-text sm" id="btn-page-upload" style="padding:0 4px">Upload instead</button>
+            </p>
           </div>
 
           <div class="card">

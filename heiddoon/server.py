@@ -25,6 +25,8 @@ from pydantic import BaseModel
 from . import prompts
 from .config import settings
 from .core.contract import compile_contract
+from .autopilot import Autopilot
+from .core import notes as notes_mod
 from .core.session import Session
 from .providers import Provider, ProviderError, get_provider
 from .schemas import Contract, Event
@@ -37,6 +39,7 @@ app = FastAPI(title="Heid Doon", version="0.1.0")
 _store = Store(settings.db_path)
 _sessions: dict[int, Session] = {}
 _streams: dict[int, list[queue.SimpleQueue]] = {}
+_autopilot = Autopilot()
 
 
 @app.exception_handler(SessionGone)
@@ -114,12 +117,22 @@ class AnswerRequest(BaseModel):
     answer: str
 
 
+<<<<<<< HEAD
 class TTSRequest(BaseModel):
     text: str
     voice: str | None = None
     style: str | None = None
     emotion: str | None = None
     speed: float | None = None
+=======
+class AutopilotRequest(BaseModel):
+    enabled: bool = True
+    cadence_s: int | None = None
+
+
+class BreakStateRequest(BaseModel):
+    on_break: bool
+>>>>>>> 2f3113fa4c56e0718a6c75249044e1113671e2e4
 
 
 # ── status ──────────────────────────────────────────────────────────────────
@@ -231,6 +244,8 @@ def status() -> dict[str, Any]:
         # the right frame because the server runs on the student's own machine —
         # which is also why the UI says whose screen it is about to read.
         "server_capture": _server_capture_available(),
+        "auto_cadence_s": settings.auto_cadence_s,
+        "notes_prompt_every_min": settings.notes_prompt_every_min,
     }
 
 
@@ -288,9 +303,12 @@ def api_tts(request: TTSRequest) -> Response:
 
 
 @app.post("/api/session/{session_id}/finish")
-def api_finish(session_id: int) -> dict[str, Any]:
+async def api_finish(session_id: int) -> dict[str, Any]:
     session = _session(session_id)
-    receipt = session.finish()
+    # Stop watching before writing the receipt, so the loop cannot append an event
+    # to a session that has already been accounted for.
+    await _autopilot.stop(session_id)
+    receipt = await asyncio.to_thread(session.finish)
     _sessions.pop(session_id, None)
     return {"receipt": receipt.to_dict(), "repairs": receipt._repairs}
 
@@ -355,6 +373,68 @@ async def api_capture_screen(session_id: int, monitor: int = 1) -> dict[str, Any
     return {"verdict": verdict.to_dict(), "repairs": verdict._repairs}
 
 
+@app.post("/api/session/{session_id}/autopilot")
+async def api_autopilot(session_id: int, request: AutopilotRequest) -> dict[str, Any]:
+    """Turn the automatic watch loop on or off.
+
+    On is the intended state: the student should not have to press anything to be
+    watched, and the loop runs server-side so it survives the tab being hidden.
+    """
+    session = _session(session_id)
+    if request.enabled:
+        state = await _autopilot.start(session, cadence_s=request.cadence_s)
+        if state.last_error:
+            raise HTTPException(status_code=503, detail=state.last_error)
+    else:
+        await _autopilot.stop(session_id)
+    return {"autopilot": _autopilot.state(session_id).to_dict()}
+
+
+@app.get("/api/session/{session_id}/autopilot")
+def api_autopilot_state(session_id: int) -> dict[str, Any]:
+    return {"autopilot": _autopilot.state(session_id).to_dict()}
+
+
+@app.post("/api/session/{session_id}/notes-photo")
+async def api_notes_photo(session_id: int, file: UploadFile) -> dict[str, Any]:
+    """Read a photo of handwritten notes and judge the delta since the last one.
+
+    This is the answer to paper: transcribe, then reuse the work-diff unchanged. An
+    unreadable photo is not recorded as an event — holding a camera badly says
+    nothing about whether the student is working.
+    """
+    from PIL import Image
+
+    session = _session(session_id)
+    payload = await file.read()
+    try:
+        with Image.open(io.BytesIO(payload)) as handle:
+            frame = handle.convert("RGB")
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=f"could not read that image: {exc}") from exc
+    finally:
+        await file.close()
+
+    page, diff = await asyncio.to_thread(session.check_notes_photo, frame)
+    problem = notes_mod.unreadable_reason(page)
+    return {
+        "ok": problem is None,
+        "problem": problem,
+        "page_note": page.page_note,
+        "words": len(page.text.split()),
+        "baseline": problem is None and diff is None,
+        "diff": diff.to_dict() if diff else None,
+    }
+
+
+@app.post("/api/session/{session_id}/break-state")
+def api_break_state(session_id: int, request: BreakStateRequest) -> dict[str, Any]:
+    """Tell the session a break started or ended, so it stops asking for anything."""
+    session = _session(session_id)
+    session.note_break(request.on_break)
+    return {"on_break": request.on_break}
+
+
 @app.post("/api/session/{session_id}/diff")
 async def api_diff(session_id: int, request: DiffRequest) -> dict[str, Any]:
     session = _session(session_id)
@@ -382,10 +462,18 @@ async def api_break(session_id: int, request: BreakRequest) -> dict[str, Any]:
     session = _session(session_id)
     quiz = await asyncio.to_thread(session.request_break, request.notes)
     if not quiz.question:
-        raise HTTPException(status_code=502, detail="could not generate a question from those notes")
+        raise HTTPException(
+            status_code=502,
+            detail="Could not think of a question just now — try again, or show me your page first.",
+        )
     # key_points are withheld: they are the answer, and this response goes to the
     # browser of the person being asked.
-    return {"question": quiz.question, "n_key_points": len(quiz.key_points)}
+    return {
+        "question": quiz.question,
+        "n_key_points": len(quiz.key_points),
+        # Where it came from, so the UI cannot imply it read notes it never saw.
+        "source": quiz.source,
+    }
 
 
 @app.post("/api/session/{session_id}/break/answer")
@@ -511,6 +599,12 @@ def api_history(profile: str = "default") -> dict[str, Any]:
         "sessions": _store.recent_sessions(profile=profile),
         "learner_model": _store.get_learner(profile=profile).to_dict(),
     }
+
+
+@app.on_event("shutdown")
+async def _shutdown() -> None:
+    """Never leave a capture loop running behind a dead server."""
+    await _autopilot.stop_all()
 
 
 # ── static UI ───────────────────────────────────────────────────────────────

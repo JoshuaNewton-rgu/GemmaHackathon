@@ -15,6 +15,7 @@ from ..providers import CallMeta, Provider
 from ..schemas import Contract, Grade, Quiz
 
 _WORD = re.compile(r"\b[\w'-]+\b")
+_EXCLAMATIONS = re.compile(r"[!]+")
 
 #: Shorter than this cannot contain a recalled mechanism, so it is graded without
 #: spending a model call — and without the model's tendency to be kind about it.
@@ -23,12 +24,46 @@ MIN_ANSWER_WORDS = 4
 _EVASIONS = ("i don't know", "idk", "dunno", "no idea", "skip", "just let me")
 
 
-def ask_question(provider: Provider, notes: str, *, max_chars: int = 4000) -> tuple[Quiz, CallMeta]:
-    raw, meta = provider.complete_json(
-        prompts.render(prompts.BOUNCER_QUESTION, notes=notes[:max_chars]),
-        max_tokens=350,
-    )
+#: Below this there is not enough writing to build a retrieval question from, and
+#: asking the model anyway produces something invented. Observed: an empty notes
+#: string yielded a question about scientific theories versus laws to a student
+#: revising thermodynamics — confidently irrelevant, which is worse than an error.
+MIN_NOTES_WORDS = 12
+
+
+def ask_question(
+    provider: Provider,
+    notes: str,
+    *,
+    contract: Contract | None = None,
+    max_chars: int = 4000,
+) -> tuple[Quiz, CallMeta]:
+    """One retrieval question, from the student's notes when there are any.
+
+    Falls back to the contracted topic rather than to nothing. A break should not be
+    blocked because Heid Doon has not been shown any work yet, but the question must
+    not pretend to quote notes it has never read — so the caller is told which source
+    was used, and the UI says so.
+    """
+    has_notes = len(_WORD.findall(notes or "")) >= MIN_NOTES_WORDS
+
+    if has_notes:
+        prompt = prompts.render(prompts.BOUNCER_QUESTION, notes=notes[:max_chars])
+        source = "your own notes"
+    elif contract is not None and contract.task:
+        prompt = prompts.render(prompts.BOUNCER_TOPIC_QUESTION, contract=contract.for_prompt())
+        source = "your topic — I have not seen your notes yet"
+    else:
+        # Nothing to ask about at all. Say so instead of inventing a question.
+        quiz = Quiz(question="", key_points=[])
+        quiz._repairs.append("no notes and no task to ask about")
+        return quiz, CallMeta(
+            provider=provider.name, model=provider.model, latency_s=0.0, attempts=0, ok=True
+        )
+
+    raw, meta = provider.complete_json(prompt, max_tokens=350)
     quiz = Quiz.from_model(raw)
+    quiz.source = source
     quiz._meta = meta.to_dict()
     meta.repairs = list(quiz._repairs)
     return quiz, meta
@@ -67,6 +102,10 @@ def grade_answer(provider: Provider, quiz: Quiz, answer: str) -> tuple[Grade, Ca
         return grade, meta
 
     grade = Grade.from_model(raw)
+    # Same tone rule as the nudges in core/verdict.py: the product promises a voice
+    # without exclamation marks, and grading is where the model most wants to cheer.
+    # "Great job!" becomes "Great job." — warmth survives, the shouting does not.
+    grade.feedback = _EXCLAMATIONS.sub(".", grade.feedback).strip()
     grade._meta = meta.to_dict()
     meta.repairs = list(grade._repairs)
     return grade, meta

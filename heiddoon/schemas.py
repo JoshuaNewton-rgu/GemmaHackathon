@@ -209,11 +209,44 @@ class Diff(_Base):
 
 
 @dataclass
+class PageRead(_Base):
+    """A photo of handwritten notes, turned into text.
+
+    Transcribing rather than judging is deliberate: once the page is text, the work
+    diff treats paper exactly like a file, so progress/padding/stalled, the receipt
+    and the learner model all work on handwriting with no special cases.
+    """
+
+    text: str = ""
+    legible: bool = False
+    page_note: str = ""
+    looks_like_notes: bool = True
+
+    @classmethod
+    def from_model(cls, raw: dict[str, Any]) -> PageRead:
+        repairs: list[str] = []
+        text = _str(raw.get("text"), "", "text", repairs)
+        page = cls(
+            text=text,
+            # A model that returned no text has not read a legible page, whatever
+            # it claims in the flag.
+            legible=_bool(raw.get("legible"), bool(text.strip()), "legible", repairs) and bool(text.strip()),
+            page_note=_str(raw.get("page_note"), "", "page_note", repairs),
+            looks_like_notes=_bool(raw.get("looks_like_notes", True), True, "looks_like_notes", repairs),
+            _repairs=repairs,
+        )
+        return page
+
+
+@dataclass
 class Quiz(_Base):
     """A retrieval question generated from the student's own notes."""
 
     question: str = ""
     key_points: list[str] = field(default_factory=list)
+    #: Where the question came from, shown to the student. A question built from the
+    #: topic rather than from their writing must not claim to be "from your notes".
+    source: str = "your own notes"
 
     @classmethod
     def from_model(cls, raw: dict[str, Any]) -> Quiz:
