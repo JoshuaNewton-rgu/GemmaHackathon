@@ -62,6 +62,7 @@ class Session:
         self._pending_quiz: Quiz | None = None
         self._last_artifact_check: dict[str, float] = {}
         self._last_notes_check: float | None = None
+        self._last_progress_check: float | None = None
         self._on_break = False
 
     # ── plumbing ────────────────────────────────────────────────────────────
@@ -131,7 +132,56 @@ class Session:
         excerpt = result.work_text.strip()
         if len(excerpt.split()) < MIN_WORK_WORDS:
             return
+        baseline = self.store.first_snapshot(self.id, SCREEN_WORK_PATH)
         self.store.add_snapshot(self.id, SCREEN_WORK_PATH, excerpt)
+        self._maybe_judge_screen_progress(baseline, excerpt, result.work_source)
+
+    def _maybe_judge_screen_progress(
+        self, baseline: dict[str, Any] | None, current: str, work_source: str
+    ) -> Diff | None:
+        """Judge progress on writing read off the screen, without being asked.
+
+        This is what makes "it watches your work" true for someone simply typing.
+        The excerpts were being collected already; without this they only ever fed
+        the quiz, so a student could write for an hour and see no progress recorded.
+
+        Two throttles, because a diff is a real call and someone typing changes the
+        screen constantly:
+
+        - at most one every `progress_every_min`;
+        - and only when enough *new words* exist to be worth judging. The word diff
+          ignores text that merely moved, which conveniently means scrolling through
+          your own notes does not read as writing them.
+        """
+        if baseline is None:
+            return None  # first excerpt of the session is the baseline, not a verdict
+
+        since = time.time() - (self._last_progress_check or self.started_at)
+        if since < self.settings.progress_every_min * 60:
+            return None
+        if abs(diff_mod.net_word_delta(baseline["content"], current)) < diff_mod.MIN_INTERESTING_WORDS:
+            return None
+
+        self._last_progress_check = time.time()
+        minutes = max(1, int((time.time() - baseline["at"]) // 60))
+        result, _ = diff_mod.judge_delta(
+            self.provider, self.contract, baseline["content"], current, minutes=minutes
+        )
+        self._record(
+            Event(
+                kind="diff",
+                seen=work_source or "your notes on screen",
+                detail={
+                    "verdict": result.verdict,
+                    "delta_words": result.delta_words,
+                    "summary": result.summary,
+                    "quality_note": result.quality_note,
+                    "minutes": minutes,
+                    "source": "screen",
+                },
+            )
+        )
+        return result
 
     def note_idle(self, idle_s: int, screen_unchanged: bool) -> Event | None:
         """F10 — cheap signal: an unchanged screen plus no input means you are elsewhere.

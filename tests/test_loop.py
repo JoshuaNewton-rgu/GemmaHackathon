@@ -693,6 +693,60 @@ class TestPaperNotes:
         assert quiz.source == "your own notes"
         assert "Maximal munch" in session.provider.calls[-1]
 
+    def test_typing_produces_a_progress_verdict_on_its_own(self, session, monkeypatch):
+        """The complaint this answers: writing was read but never judged.
+
+        Excerpts fed the quiz and nothing else, so a student could type for an hour
+        and see no progress recorded anywhere.
+        """
+        from heiddoon.core import verdict as verdict_mod
+        from heiddoon.schemas import Verdict
+
+        pages = iter([
+            "Maximal munch takes the longest lexeme at each position rather than the first match found",
+            "Maximal munch takes the longest lexeme at each position rather than the first match found "
+            + " ".join(f"new{n}" for n in range(60)),
+        ])
+        monkeypatch.setattr(
+            verdict_mod,
+            "judge_frame",
+            lambda *a, **k: (Verdict(on_task=True, seen="editor", work_text=next(pages)), None),
+        )
+
+        session.judge_frame(object(), kind="screen")   # baseline
+        session.settings.progress_every_min = 0        # skip the throttle for the test
+        session.judge_frame(object(), kind="screen")   # now there is new material
+
+        diffs = [event for event in session.events if event.kind == "diff"]
+        assert diffs, "typing produced no progress verdict"
+        assert diffs[0].detail["source"] == "screen"
+        assert diffs[0].detail["delta_words"] == 60
+
+    def test_progress_is_throttled(self, session, monkeypatch):
+        """A diff is a real call, and someone typing changes the screen constantly."""
+        from heiddoon.core import verdict as verdict_mod
+        from heiddoon.schemas import Verdict
+
+        text = "word " * 40
+        monkeypatch.setattr(
+            verdict_mod,
+            "judge_frame",
+            lambda *a, **k: (Verdict(on_task=True, seen="editor", work_text=text + "extra " * 40), None),
+        )
+        session.store.add_snapshot(session.id, "screen:work", text)
+        session._last_progress_check = time.time()  # just checked
+        session.judge_frame(object(), kind="screen")
+        assert not [event for event in session.events if event.kind == "diff"]
+
+    def test_scrolling_your_own_notes_is_not_writing_them(self):
+        """The word diff ignores text that merely moved, which is what makes reading
+        work off a scrolling screen viable at all."""
+        from heiddoon.core.diff import net_word_delta
+
+        page = "alpha beta gamma delta epsilon zeta eta theta"
+        scrolled = "epsilon zeta eta theta alpha beta gamma delta"
+        assert net_word_delta(page, scrolled) == 0
+
     def test_a_stray_line_is_not_kept_as_work(self, session, monkeypatch):
         """A window title is not something to build a retrieval question from."""
         from heiddoon.core import verdict as verdict_mod
