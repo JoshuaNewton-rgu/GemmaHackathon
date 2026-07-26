@@ -484,6 +484,44 @@ class TestArtifactWatcher:
         assert len(watcher.missing()) == 1
 
 
+# ── screen capture ──────────────────────────────────────────────────────────
+
+
+class TestScreenCapture:
+    """The server can grab its own screen, but must say so rather than assume it.
+
+    The browser's getDisplayMedia throws NotSupportedError in embedded webviews, so
+    the server-side path is the primary one — which makes its availability check
+    load-bearing for whether the UI offers the button at all.
+    """
+
+    def test_unavailable_without_mss(self, monkeypatch):
+        from heiddoon.watchers import screen as screen_mod
+
+        monkeypatch.setattr(screen_mod, "mss", None)
+        assert screen_mod.available() is False
+
+    def test_capture_raises_a_readable_error_without_mss(self, monkeypatch):
+        from heiddoon.watchers import screen as screen_mod
+
+        monkeypatch.setattr(screen_mod, "mss", None)
+        with pytest.raises(screen_mod.ScreenUnavailable, match="pip install mss"):
+            screen_mod.capture()
+
+    def test_frame_hash_ignores_noise_but_catches_a_new_window(self):
+        from PIL import Image
+
+        from heiddoon.watchers import screen as screen_mod
+
+        base = Image.new("RGB", (400, 300), (250, 250, 250))
+        nudged = base.copy()
+        nudged.putpixel((0, 0), (249, 249, 249))  # a cursor blink, effectively
+        different = Image.new("RGB", (400, 300), (12, 40, 30))
+
+        assert screen_mod.frame_hash(base) == screen_mod.frame_hash(nudged)
+        assert screen_mod.frame_hash(base) != screen_mod.frame_hash(different)
+
+
 # ── the eval refuses to launder mock output ─────────────────────────────────
 
 

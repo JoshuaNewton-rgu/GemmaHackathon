@@ -131,6 +131,16 @@ def _privacy_line(reachable: bool, is_local: bool, is_mock: bool) -> str:
     return "Frames are sent to a hosted API to be judged, then discarded. Never stored."
 
 
+def _server_capture_available() -> bool:
+    """Can this process see a screen? False on a headless or remote host."""
+    try:
+        from .watchers import screen as screen_mod
+
+        return screen_mod.available()
+    except Exception:  # noqa: BLE001
+        return False
+
+
 @app.get("/api/status")
 def status() -> dict[str, Any]:
     """What the UI needs to tell the truth about itself in its own header."""
@@ -151,6 +161,11 @@ def status() -> dict[str, Any]:
         "privacy_line": _privacy_line(reachable, is_local, is_mock),
         "cadence_s": settings.cadence_s,
         "prompt_version": prompts.PROMPT_VERSION,
+        # Whether the server can grab its own screen. When it can, the UI prefers
+        # that over the browser's share-picker: one click and no dialog. It is only
+        # the right frame because the server runs on the student's own machine —
+        # which is also why the UI says whose screen it is about to read.
+        "server_capture": _server_capture_available(),
     }
 
 
@@ -230,6 +245,36 @@ async def api_frame(session_id: int, file: UploadFile, kind: str = "screen") -> 
         await file.close()
 
     verdict = await asyncio.to_thread(session.judge_frame, frame, kind=kind)
+    return {"verdict": verdict.to_dict(), "repairs": verdict._repairs}
+
+
+@app.post("/api/session/{session_id}/capture-screen")
+async def api_capture_screen(session_id: int, monitor: int = 1) -> dict[str, Any]:
+    """Capture this machine's screen server-side and judge it.
+
+    The browser route (`getDisplayMedia`) is unavailable in embedded webviews and
+    some browser configurations, where it throws NotSupportedError — and it makes
+    the student pick a window from a dialog every single time. Since the server
+    runs on the student's own machine, it can take the frame directly with the same
+    code path the local watcher uses: one click, whole screen, no dialog.
+
+    The frame lives in memory for the length of this call, exactly as with an
+    upload. Nothing is written to disk.
+    """
+    from .watchers import screen as screen_mod
+
+    session = _session(session_id)
+    if not screen_mod.available():
+        raise HTTPException(
+            status_code=503,
+            detail="Screen capture is unavailable on the server: pip install mss",
+        )
+    try:
+        frame = await asyncio.to_thread(screen_mod.capture, monitor)
+    except Exception as exc:  # noqa: BLE001 - no display, wrong monitor index, etc.
+        raise HTTPException(status_code=503, detail=f"could not capture the screen: {exc}") from exc
+
+    verdict = await asyncio.to_thread(session.judge_frame, frame, kind="screen")
     return {"verdict": verdict.to_dict(), "repairs": verdict._repairs}
 
 

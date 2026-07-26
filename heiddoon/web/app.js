@@ -16,6 +16,7 @@ const state = {
   breakTimer: null,
   breakEndsAt: null,
   breakTotal: 0,
+  serverCapture: false,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -129,6 +130,12 @@ async function loadStatus() {
     if (status.mock) badge.textContent = "MOCK — no model running";
     $("bar-note").textContent = status.local_inference ? "on this machine" : "hosted";
     $("sig-screen-desc").textContent = `Judged every ${status.cadence_s} seconds`;
+    // Say which screen the button is about to read — the server's, or whichever
+    // window the browser picker offers.
+    state.serverCapture = !!status.server_capture;
+    $("capture-hint").textContent = state.serverCapture
+      ? "Grabs this machine's screen as it is right now, judges it, and drops it. No dialog, nothing stored."
+      : "Asks which window or screen to share, grabs one frame, and stops. Nothing keeps watching.";
     if (!status.provider_ready) snack(status.provider, true);
   } catch {
     $("model-badge").textContent = "server unreachable";
@@ -375,42 +382,61 @@ async function grabStill(stream) {
   return new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.85));
 }
 
-/* Capture the student's actual screen from the browser — the closest the web app
-   gets to what the local watcher does. The stream is stopped in a `finally` the
-   moment the frame exists, so the share indicator goes off straight away: this is
-   one glance, not a session of watching. */
+/* Capture the screen and judge it.
+
+   Two routes, because the browser one is not always available:
+
+   1. Server-side, via mss — the same code the local watcher uses. Preferred when
+      the server reports it can see a display: one click, whole screen, no dialog,
+      and it works in embedded webviews where getDisplayMedia throws
+      NotSupportedError.
+   2. The browser's getDisplayMedia, as a fallback for when the server is headless
+      or running on a different machine from the student.
+
+   Either way the frame exists only for the length of one call. */
 $("btn-screenshot").addEventListener("click", async (event) => {
   if (!state.sessionId) { snack("Start a session first.", true); return; }
-  if (!navigator.mediaDevices?.getDisplayMedia) {
-    snack("This browser cannot capture the screen — drop an image instead.", true);
-    return;
-  }
+  const done = withBusy(event.target, "reading your screen");
+  try {
+    if (state.serverCapture) {
+      await api(`/api/session/${state.sessionId}/capture-screen`, { method: "POST" });
+      return;
+    }
+    await captureViaBrowser();
+  } catch (error) {
+    snack(`Could not capture: ${error.message}`, true);
+  } finally { done(); }
+});
 
+async function captureViaBrowser() {
+  if (!navigator.mediaDevices?.getDisplayMedia) {
+    throw new Error("this browser cannot capture the screen — drop an image instead");
+  }
   let stream;
   try {
-    stream = await navigator.mediaDevices.getDisplayMedia({
-      video: { displaySurface: "monitor" },
-      audio: false,
-    });
+    // No `displaySurface` hint: some browsers reject unknown video constraints
+    // outright with NotSupportedError rather than ignoring them.
+    stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
   } catch (error) {
     // Dismissing the picker is a normal choice, not an error worth shouting about.
-    if (error.name !== "NotAllowedError") snack(`Could not capture: ${error.message}`, true);
-    return;
+    if (error.name === "NotAllowedError") return;
+    if (error.name === "NotSupportedError") {
+      throw new Error("this browser refuses screen capture — try Chrome or Firefox directly, "
+        + "or install mss on the server so it can grab the screen itself");
+    }
+    throw error;
   }
-
-  const done = withBusy(event.target, "reading your screen");
   try {
     const blob = await grabStill(stream);
     const form = new FormData();
     form.append("file", blob, "screen.jpg");
     await api(`/api/session/${state.sessionId}/frame?kind=screen`, { method: "POST", body: form });
-  } catch (error) {
-    snack(`Could not judge that frame: ${error.message}`, true);
   } finally {
+    // Stop immediately, so the browser's sharing indicator goes off: this is one
+    // glance, not a session of watching.
     stream.getTracks().forEach((track) => track.stop());
-    done();
   }
-});
+}
 
 $("btn-webcam").addEventListener("click", async () => {
   try {
