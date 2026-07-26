@@ -159,7 +159,7 @@ async function loadStatus() {
 
 /* ── contract (3a) ──────────────────────────────────────────────────────── */
 
-const EXAMPLE = `Two hours on thermodynamics chapter 4 — entropy. Lecture videos and PDFs about thermodynamics are fine, music is fine, and my study group chat is fine when we're actually discussing the problem set. No social media, no entertainment videos. I'm writing into notes_thermo.md. This is the chapter I keep dodging and the exam is Thursday.`;
+const EXAMPLE = `Two hours on compilers — lexical analysis and tokenisation. Lecture videos and the course PDFs about compilers are fine, regex and language docs are fine, music is fine, and my study-group chat is fine when we're actually discussing the coursework. No social media, no entertainment videos. I'm writing into notes_tokenising.md. The lexer is the part I keep putting off and the coursework is due Friday.`;
 
 $("btn-example").addEventListener("click", () => {
   $("contract-text").value = EXAMPLE;

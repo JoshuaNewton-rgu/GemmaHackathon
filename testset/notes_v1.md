@@ -1,8 +1,11 @@
-# Thermodynamics — Chapter 4 revision notes
+# Compilers — lexical analysis (tokenisation)
 
-## Entropy basics
-- S = k ln W (statistical definition)
-- dS = δQ_rev / T (classical definition, state function)
+## What a lexer is for
+- Turns a flat character stream into a stream of **tokens**.
+- Token = (kind, lexeme, source position). Kind is what the parser cares about.
+- Lexeme = the exact characters matched. `count`, `42`, `>=` are lexemes.
 
-## Clausius inequality
-∮ δQ/T ≤ 0 for any cycle, equality iff reversible.
+## Vocabulary I keep mixing up
+- **Lexeme** — the raw text matched.
+- **Token** — the classified pair the parser receives.
+- **Pattern** — the rule (usually a regex) describing the lexeme set.
