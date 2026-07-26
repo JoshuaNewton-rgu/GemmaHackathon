@@ -130,6 +130,22 @@ Notes:
 Schema: {{"question": str, "key_points": [str]}}   // key_points: what a correct answer must contain"""
 
 
+BOUNCER_TOPIC_QUESTION = """A student wants a break. Before they get it, they answer one question.
+
+Heid Doon has not seen their notes yet, so ask about the contracted topic itself rather
+than pretending to quote work you have not read.
+
+Their contract: {contract}
+
+Write ONE question that:
+- a student partway through this topic should be able to answer in two or three
+  sentences from memory
+- targets a mechanism, a distinction, or a common trap in this topic
+- stays strictly inside the contracted task; do not drift to a neighbouring subject
+
+Schema: {{"question": str, "key_points": [str]}}"""
+
+
 BOUNCER_GRADE = """Grade a student's recall answer.
 
 Question: {question}

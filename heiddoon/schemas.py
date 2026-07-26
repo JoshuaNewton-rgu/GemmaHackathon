@@ -244,6 +244,9 @@ class Quiz(_Base):
 
     question: str = ""
     key_points: list[str] = field(default_factory=list)
+    #: Where the question came from, shown to the student. A question built from the
+    #: topic rather than from their writing must not claim to be "from your notes".
+    source: str = "your own notes"
 
     @classmethod
     def from_model(cls, raw: dict[str, Any]) -> Quiz:

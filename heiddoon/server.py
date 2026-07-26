@@ -384,10 +384,18 @@ async def api_break(session_id: int, request: BreakRequest) -> dict[str, Any]:
     session = _session(session_id)
     quiz = await asyncio.to_thread(session.request_break, request.notes)
     if not quiz.question:
-        raise HTTPException(status_code=502, detail="could not generate a question from those notes")
+        raise HTTPException(
+            status_code=502,
+            detail="Could not think of a question just now — try again, or show me your page first.",
+        )
     # key_points are withheld: they are the answer, and this response goes to the
     # browser of the person being asked.
-    return {"question": quiz.question, "n_key_points": len(quiz.key_points)}
+    return {
+        "question": quiz.question,
+        "n_key_points": len(quiz.key_points),
+        # Where it came from, so the UI cannot imply it read notes it never saw.
+        "source": quiz.source,
+    }
 
 
 @app.post("/api/session/{session_id}/break/answer")

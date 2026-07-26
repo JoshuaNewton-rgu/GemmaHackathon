@@ -231,6 +231,30 @@ class TestBouncer:
         grade, _ = bouncer.grade_answer(provider, Quiz(question="q", key_points=["k"]), "idk")
         assert grade.passed is False
 
+    def test_a_real_answer_goes_through_the_model_path(self):
+        """Covers the branch every other bouncer test short-circuits past.
+
+        The deterministic guards (too short, evasion) return before the model is
+        called, so nothing here exercised grading proper — and a NameError on that
+        path would have reached a user rather than the suite.
+        """
+        provider = MockProvider()
+        quiz = Quiz(question="Why does entropy rise in free expansion?", key_points=["state function"])
+        grade, meta = bouncer.grade_answer(
+            provider, quiz, "Because entropy is a state function, only the endpoints matter."
+        )
+        assert provider.calls, "the model was never asked to grade"
+        assert meta.ok
+        assert isinstance(grade.passed, bool)
+
+    def test_exclamation_marks_are_stripped_from_feedback(self):
+        """The product promises a voice without them, and grading is where the
+        model most wants to cheer."""
+        provider = MockProvider()
+        monkey = Quiz(question="q", key_points=["k"])
+        grade, _ = bouncer.grade_answer(provider, monkey, "a genuine attempt at the real answer here")
+        assert "!" not in grade.feedback
+
     def test_overlap_fallback_passes_a_good_answer(self):
         quiz = Quiz(
             question="Why does entropy rise in free expansion?",
@@ -241,6 +265,36 @@ class TestBouncer:
             "because entropy is a state function so only the endpoints matter, not the path",
         )
         assert grade.passed is True
+
+    def test_empty_notes_do_not_produce_an_invented_question(self):
+        """With no notes, asking the model anyway invents something irrelevant.
+
+        Observed live: an empty notes string produced a question about scientific
+        theories versus laws for a student revising thermodynamics. Confidently
+        irrelevant is worse than an error, so the topic prompt is used instead.
+        """
+        provider = MockProvider()
+        bouncer.ask_question(provider, "", contract=CONTRACT)
+        assert len(provider.calls) == 1
+        # The topic prompt, not the notes prompt.
+        assert "have not seen your notes" in provider.calls[0] or "contracted topic" in provider.calls[0]
+
+    def test_notes_are_used_when_there_are_enough_of_them(self):
+        provider = MockProvider()
+        notes = "Entropy is a state function so only the endpoints matter, not the path taken."
+        quiz, _ = bouncer.ask_question(provider, notes, contract=CONTRACT)
+        assert "Notes:" in provider.calls[0]
+        assert quiz.source == "your own notes"
+
+    def test_the_source_is_honest_about_the_topic_fallback(self):
+        quiz, _ = bouncer.ask_question(MockProvider(), "", contract=CONTRACT)
+        assert "not seen your notes" in quiz.source
+
+    def test_no_notes_and_no_task_asks_nothing_at_all(self):
+        provider = MockProvider()
+        quiz, _ = bouncer.ask_question(provider, "", contract=Contract())
+        assert quiz.question == ""
+        assert provider.calls == []  # nothing invented from nothing
 
     def test_overlap_fallback_rejects_a_bad_answer(self):
         quiz = Quiz(question="q", key_points=["entropy is a state function", "endpoints matter"])
@@ -603,6 +657,39 @@ class TestPaperNotes:
         assert diff.delta_words == 40  # counted from the transcriptions, not guessed
         diff_events = [event for event in session.events if event.kind == "diff"]
         assert diff_events[0].detail["source"] == "paper"
+
+    def test_the_bouncer_can_see_a_photographed_page(self, session, monkeypatch):
+        """The bug the user hit: a photographed page was invisible to the Bouncer.
+
+        _artifact_text only looked at contract.artifacts, so the transcription sitting
+        under the paper pseudo-path was ignored and the quiz was built from nothing.
+        """
+        from heiddoon.core import notes as notes_mod
+        from heiddoon.schemas import PageRead
+
+        written = "Entropy is a state function so only the endpoints matter, not the path taken."
+        monkeypatch.setattr(
+            notes_mod, "transcribe_page", lambda *a, **k: (PageRead(text=written, legible=True), None)
+        )
+        session.check_notes_photo(object())
+
+        quiz = session.request_break()
+        assert quiz.source == "your own notes"
+        assert written[:30] in session.provider.calls[-1]
+
+    def test_the_newest_source_wins(self, session, monkeypatch):
+        """A page photographed after the last file save is the more current work."""
+        from heiddoon.core import notes as notes_mod
+        from heiddoon.schemas import PageRead
+
+        session.store.add_snapshot(session.id, "notes.md", "older typed material about the Clausius inequality")
+        monkeypatch.setattr(
+            notes_mod,
+            "transcribe_page",
+            lambda *a, **k: (PageRead(text="newer handwritten material about free expansion", legible=True), None),
+        )
+        session.check_notes_photo(object())
+        assert "newer handwritten" in session._artifact_text()
 
     def test_transcription_is_stored_under_a_pseudo_path(self, session, monkeypatch):
         """So a page can never collide with a real file on disk."""

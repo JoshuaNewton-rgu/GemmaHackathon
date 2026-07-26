@@ -301,7 +301,7 @@ class Session:
     def request_break(self, notes: str | None = None) -> Quiz:
         """Ask the Bouncer for a break: it asks one question back."""
         source = notes if notes is not None else self._artifact_text()
-        quiz, _ = bouncer.ask_question(self.provider, source or "")
+        quiz, _ = bouncer.ask_question(self.provider, source or "", contract=self.contract)
         self._pending_quiz = quiz
         return quiz
 
@@ -323,11 +323,27 @@ class Session:
         return grade
 
     def _artifact_text(self) -> str:
-        """The most recent snapshot of the contracted file, for quiz generation."""
+        """The most recent thing the student has written, whatever medium it is in.
+
+        Both sources have to be considered, and the newest has to win. Looking only
+        at `contract.artifacts` was a real bug: a student who photographed their
+        handwritten page had notes sitting in the store under the paper pseudo-path,
+        and the Bouncer ignored them — so it asked about nothing, from nothing.
+        """
+        candidates: list[dict[str, Any]] = []
+
+        paper = self.store.latest_snapshot(self.id, notes_mod.PAPER_PATH)
+        if paper:
+            candidates.append(paper)
         for artifact in self.contract.artifacts:
             snapshot = self.store.latest_snapshot(self.id, str(Path(artifact).expanduser()))
             if snapshot:
-                return snapshot["content"]
+                candidates.append(snapshot)
+
+        if not candidates:
+            return ""
+        newest = max(candidates, key=lambda snapshot: snapshot["at"])
+        return newest["content"]
         return ""
 
     # ── receipt + adapt ─────────────────────────────────────────────────────

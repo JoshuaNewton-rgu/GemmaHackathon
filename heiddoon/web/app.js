@@ -657,18 +657,20 @@ $("btn-close-bouncer").addEventListener("click", () => $("ov-bouncer").classList
 
 async function askForBreak() {
   if (!state.sessionId) { snack("Start a session first.", true); return; }
-  $("bouncer-question").textContent = "…";
+  $("bouncer-question").textContent = "Thinking of something to ask you…";
+  $("bouncer-source").textContent = "";
   $("bouncer-result").classList.add("hidden");
   $("bouncer-answer").value = "";
   $("ov-bouncer").classList.add("open");
   try {
     const notes = $("diff-after").value.trim() || null;
-    const { question } = await api(`/api/session/${state.sessionId}/break`, {
+    const { question, source } = await api(`/api/session/${state.sessionId}/break`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ notes }),
     });
     $("bouncer-question").textContent = question;
+    $("bouncer-source").textContent = `from ${source || "your own notes"}`;
   } catch (error) {
     $("bouncer-question").textContent = "Could not think of a question just now.";
     snack(error.message, true);
