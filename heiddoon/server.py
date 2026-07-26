@@ -117,14 +117,14 @@ class AnswerRequest(BaseModel):
     answer: str
 
 
-<<<<<<< HEAD
 class TTSRequest(BaseModel):
     text: str
     voice: str | None = None
     style: str | None = None
     emotion: str | None = None
     speed: float | None = None
-=======
+
+
 class AutopilotRequest(BaseModel):
     enabled: bool = True
     cadence_s: int | None = None
@@ -132,7 +132,6 @@ class AutopilotRequest(BaseModel):
 
 class BreakStateRequest(BaseModel):
     on_break: bool
->>>>>>> 2f3113fa4c56e0718a6c75249044e1113671e2e4
 
 
 # ── status ──────────────────────────────────────────────────────────────────
