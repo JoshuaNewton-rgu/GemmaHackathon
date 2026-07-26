@@ -731,6 +731,30 @@ class TestPaperNotes:
         assert diffs[0].detail["source"] == "screen"
         assert diffs[0].detail["delta_words"] == 60
 
+    def test_only_on_contract_verdict_work_can_feed_the_five_question_quiz(self, session, monkeypatch):
+        from heiddoon.core import verdict as verdict_mod
+        from heiddoon.core.session import POSITIVE_VERDICT_WORK_PATH
+        from heiddoon.schemas import Verdict
+
+        results = iter([
+            Verdict(
+                on_task=False,
+                seen="social media",
+                work_text="An unrelated discussion about holiday plans and entertainment recommendations " * 2,
+            ),
+            Verdict(
+                on_task=True,
+                seen="course editor",
+                work_text="Maximal munch selects the longest valid token before applying lexer rule order " * 2,
+            ),
+        ])
+        monkeypatch.setattr(verdict_mod, "judge_frame", lambda *a, **k: (next(results), None))
+
+        session.judge_frame(object(), kind="screen")
+        assert session.store.latest_snapshot(session.id, POSITIVE_VERDICT_WORK_PATH) is None
+        session.judge_frame(object(), kind="screen")
+        assert "Maximal munch" in session._positive_verdict_work()
+
     def test_progress_is_throttled(self, session, monkeypatch):
         """A diff is a real call, and someone typing changes the screen constantly."""
         from heiddoon.core import verdict as verdict_mod

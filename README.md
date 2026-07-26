@@ -1,16 +1,35 @@
-# Heid Doon
+# ProofStudy
 
-*A study companion that catches you procrastinating the moment it happens — and reads your real
-progress from the work itself.*
+*A Python-first study coach that makes breaks follow visible work and active recall.*
 
 **It reads your work, not just your screen.**
 You can hide a phone from a camera. You can't hide an empty page.
+
+The installable Python package and CLI remain named `heiddoon` for compatibility.
 
 ---
 
 ## What it does
 
-One session: **Contract → Watch → Intervene → Negotiate → Checkpoint → Receipt → Adapt.**
+One run: **Plan → Focus → Upload notes → Score progress → Recall → Earn break → Adapt.**
+
+The FastAPI server, SQLite store, model providers, screen watcher and fuzzy reasoning
+remain Python. The browser is a small static HTML/CSS/JavaScript client served directly
+by FastAPI; there is no Node, React or second backend.
+
+## ProofStudy MVP
+
+- Choose a subject, a 30- or 45-minute study block, and one of three bounded coach personas.
+- The server owns the countdown, so refreshing the browser does not reset the run.
+- Upload a photo of handwritten notes as proof-of-work. The image is transcribed in memory
+  and discarded; only the text is retained.
+- Receive a transparent **Progress Score (0–100)**: completion (35), substantive word
+  growth (30), new concepts (20), and the existing progress/padding/stalled verdict (15).
+- Answer five questions generated from your notes. Three correct unlocks a ten-minute
+  break; otherwise you receive a three-minute reset and a review prompt.
+- Earn persistent XP, levels and UTC daily streaks. XP is awarded once per completed
+  session, even if a finish request is retried.
+- Hear safe persona-styled feedback through `/api/tts`, with browser speech as fallback.
 
 You write a contract in your own words — what you're studying, why it matters, what counts as
 on-task for *you*, and which file you're working in. Then four signals feed one loop:
@@ -42,7 +61,7 @@ The **artifact signal** is the one that matters most, because it's the only one 
 device-independent. Procrastinate on whatever device you like — twenty minutes of it shows up as
 an empty diff.
 
-Breaks are **negotiated, not blocked**: ask for one and you answer a single retrieval question
+Breaks are **earned, not blocked**: ask for one and answer five retrieval questions
 generated from your own notes. Sessions end with a **receipt** — a drift autopsy that names the
 pattern and its trigger without shame, and an updated learner model that shapes tomorrow.
 
@@ -129,6 +148,20 @@ The web app and the watcher are two front ends over **the same `Session` object*
 database, so anything the UI shows has been through the same code path as anything the watcher
 recorded. They can run at once — the UI streams the watcher's verdicts over SSE.
 
+The ProofStudy HTTP flow is:
+
+1. `POST /api/session` with `contract` plus `study.subject`,
+   `study.planned_duration_min`, and `study.persona_id`.
+2. `POST /api/session/{id}/notes-photo` with a page image.
+3. `POST /api/session/{id}/break`, then submit all five answers to
+   `POST /api/session/{id}/break/answer`.
+4. `POST /api/session/{id}/finish`; this is rejected until readable notes proof exists.
+5. Read long-term state from `GET /api/history` or `GET /api/progress/summary`.
+
+Persona IDs are `scottish_granny`, `disappointed_mother`, and `angry_father`.
+Their styles are code-owned and strip abusive wording; “harsh” never means insulting,
+threatening or shaming the student.
+
 ## The eval
 
 ```bash
@@ -179,7 +212,7 @@ heiddoon/
   evaluate.py    the eval, which refuses to report unquotable numbers
   server.py      HTTP over the same Session the watcher uses
   web/           the front end
-tests/           42 tests, no network, no model, no GPU
+tests/           unit and HTTP-flow tests, no network, no model, no GPU
 ```
 
 ## Known limits

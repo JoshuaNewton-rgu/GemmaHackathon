@@ -32,13 +32,14 @@ from .autopilot import Autopilot
 from .core import notes as notes_mod
 from .fuzzy import DECISIONS, PERCEPTS, validate
 from .core.session import Session
+from .personas import list_personas, resolve_persona_id
 from .providers import Provider, ProviderError, get_provider
-from .schemas import Contract, Event
+from .schemas import Contract, Event, StudyMetadata
 from .store import SessionGone, Store
 
 WEB_DIR = Path(__file__).parent / "web"
 
-app = FastAPI(title="Heid Doon", version="0.1.0")
+app = FastAPI(title="ProofStudy", version="0.2.0")
 
 _store = Store(settings.db_path)
 _sessions: dict[int, Session] = {}
@@ -105,6 +106,7 @@ class ContractRequest(BaseModel):
 class StartRequest(BaseModel):
     contract: dict[str, Any]
     profile: str = "default"
+    study: dict[str, Any] | None = None
 
 
 class DiffRequest(BaseModel):
@@ -118,7 +120,9 @@ class BreakRequest(BaseModel):
 
 
 class AnswerRequest(BaseModel):
-    answer: str
+    answer: str = ""
+    quiz_id: str = ""
+    answers: list[dict[str, str]] = []
 
 
 class TTSRequest(BaseModel):
@@ -363,13 +367,27 @@ def api_start_session(request: StartRequest) -> dict[str, Any]:
     contract = Contract.from_model(request.contract)
     if not contract.task:
         raise HTTPException(status_code=400, detail="the contract needs a task")
-    session = Session(_provider(), contract, store=_store, profile=request.profile)
+    study = StudyMetadata.from_dict(
+        request.study
+        or {
+            "subject": contract.task,
+            "planned_duration_min": 45,
+            "persona_id": contract.tone,
+        }
+    )
+    study.subject = study.subject or contract.task
+    study.persona_id = resolve_persona_id(study.persona_id)
+    session = Session(_provider(), contract, store=_store, profile=request.profile, study=study)
     _attach_stream(session)
     _sessions[session.id] = session
     return {
         "session_id": session.id,
         "contract": contract.to_dict(),
+        "study": session.study.to_dict(),
+        "started_at": session.started_at,
+        "planned_end_at": session.planned_end_at,
         "learner_model": session.learner.to_dict(),
+        "gamification": _store.get_gamification(profile=request.profile).to_dict(),
     }
 
 
@@ -379,12 +397,24 @@ def api_get_session(session_id: int) -> dict[str, Any]:
     return {
         "session_id": session.id,
         "contract": session.contract.to_dict(),
+        "study": session.study.to_dict(),
+        "started_at": session.started_at,
+        "planned_end_at": session.planned_end_at,
+        "remaining_s": session.remaining_s,
+        "has_notes_proof": session.has_notes_proof,
         "elapsed_min": session.elapsed_min,
         "events": [event.to_dict() for event in session.events],
         "learner_model": session.learner.to_dict(),
+        "progress": (
+            _store.latest_progress(session.id).to_dict()
+            if _store.latest_progress(session.id)
+            else None
+        ),
+        "gamification": _store.get_gamification(profile=session.profile).to_dict(),
     }
 
 
+@app.post("/api/tts")
 @app.post("/api/tss")
 def api_tts(request: TTSRequest) -> Response:
     text = request.text.strip()
@@ -400,12 +430,23 @@ def api_tts(request: TTSRequest) -> Response:
 @app.post("/api/session/{session_id}/finish")
 async def api_finish(session_id: int) -> dict[str, Any]:
     session = _session(session_id)
+    if not session.has_notes_proof:
+        raise HTTPException(status_code=409, detail="upload a readable photo of your notes before finishing")
     # Stop watching before writing the receipt, so the loop cannot append an event
     # to a session that has already been accounted for.
     await _autopilot.stop(session_id)
-    receipt = await asyncio.to_thread(session.finish)
+    try:
+        receipt, progress, gamification, coach = await asyncio.to_thread(session.finish_study)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     _sessions.pop(session_id, None)
-    return {"receipt": receipt.to_dict(), "repairs": receipt._repairs}
+    return {
+        "receipt": receipt.to_dict(),
+        "progress": progress.to_dict(),
+        "gamification": gamification.to_dict(),
+        "coach": {"text": coach.message, "persona_id": coach.persona_id},
+        "repairs": receipt._repairs,
+    }
 
 
 # ── the mechanics ───────────────────────────────────────────────────────────
@@ -512,6 +553,20 @@ async def api_notes_photo(session_id: int, file: UploadFile) -> dict[str, Any]:
 
     page, diff = await asyncio.to_thread(session.check_notes_photo, frame)
     problem = notes_mod.unreadable_reason(page)
+    progress = _store.latest_progress(session.id) if problem is None else None
+    coach = (
+        await asyncio.to_thread(
+            session.coach_feedback,
+            {
+                "type": "notes_proof",
+                "progress_score": progress.score,
+                "new_concepts": progress.new_concepts,
+                "subject": session.study.subject,
+            },
+        )
+        if progress is not None
+        else None
+    )
     return {
         "ok": problem is None,
         "problem": problem,
@@ -519,6 +574,12 @@ async def api_notes_photo(session_id: int, file: UploadFile) -> dict[str, Any]:
         "words": len(page.text.split()),
         "baseline": problem is None and diff is None,
         "diff": diff.to_dict() if diff else None,
+        "progress": progress.to_dict() if progress else None,
+        "coach": (
+            {"text": coach.message, "persona_id": coach.persona_id}
+            if coach
+            else None
+        ),
     }
 
 
@@ -555,18 +616,23 @@ async def api_artifact_check(session_id: int) -> dict[str, Any]:
 @app.post("/api/session/{session_id}/break")
 async def api_break(session_id: int, request: BreakRequest) -> dict[str, Any]:
     session = _session(session_id)
-    quiz = await asyncio.to_thread(session.request_break, request.notes)
-    if not quiz.question:
-        raise HTTPException(
-            status_code=502,
-            detail="Could not think of a question just now — try again, or show me your page first.",
-        )
-    # key_points are withheld: they are the answer, and this response goes to the
-    # browser of the person being asked.
+    try:
+        # Client-supplied notes are intentionally ignored. Quiz material comes only
+        # from server-held excerpts attached to positive, on-contract verdicts.
+        quiz_id, quiz = await asyncio.to_thread(session.request_break_set)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    # Expected answers remain only in the server-side pending set.
     return {
-        "question": quiz.question,
-        "n_key_points": len(quiz.key_points),
-        # Where it came from, so the UI cannot imply it read notes it never saw.
+        "quiz_id": quiz_id,
+        "questions": [
+            {
+                "id": question.id,
+                "question": question.question,
+                "kind": question.kind,
+            }
+            for question in quiz.questions
+        ],
         "source": quiz.source,
     }
 
@@ -574,6 +640,27 @@ async def api_break(session_id: int, request: BreakRequest) -> dict[str, Any]:
 @app.post("/api/session/{session_id}/break/answer")
 async def api_break_answer(session_id: int, request: AnswerRequest) -> dict[str, Any]:
     session = _session(session_id)
+    if request.quiz_id:
+        try:
+            result, break_minutes, coach = await asyncio.to_thread(
+                session.answer_break_set,
+                request.quiz_id,
+                [item.get("answer", "") for item in request.answers],
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        correct_count = sum(result.correct)
+        return {
+            "pass": correct_count >= 3,
+            "correct_count": correct_count,
+            "score": result.score,
+            "feedback": " ".join(line for line in result.feedback if line),
+            "question_feedback": result.feedback,
+            "break_minutes": break_minutes,
+            "coach": {"text": coach.message, "persona_id": coach.persona_id},
+        }
+
+    # Compatibility with the original single-question API.
     grade = await asyncio.to_thread(session.answer_break, request.answer)
     return {"pass": grade.passed, "feedback": grade.feedback, "matched_points": grade.matched_points}
 
@@ -792,9 +879,53 @@ async def api_expert_review(session_id: int) -> dict[str, Any]:
 @app.get("/api/history")
 def api_history(profile: str = "default") -> dict[str, Any]:
     """Past sessions and the learner model — the part that only exists across days."""
+    sessions = _store.recent_sessions(profile=profile)
+    for record in sessions:
+        metadata = _store.get_study_metadata(record["id"])
+        progress = _store.latest_progress(record["id"])
+        record["study"] = metadata.to_dict() if metadata else None
+        record["progress"] = progress.to_dict() if progress else None
     return {
-        "sessions": _store.recent_sessions(profile=profile),
+        "sessions": sessions,
         "learner_model": _store.get_learner(profile=profile).to_dict(),
+        "gamification": _store.get_gamification(profile=profile).to_dict(),
+    }
+
+
+@app.get("/api/progress/summary")
+def api_progress_summary(profile: str = "default") -> dict[str, Any]:
+    sessions = _store.recent_sessions(profile=profile, limit=100)
+    points = []
+    for record in reversed(sessions):
+        progress = _store.latest_progress(record["id"])
+        if progress is not None:
+            points.append(
+                {
+                    "session_id": record["id"],
+                    "started_at": record["started_at"],
+                    "score": progress.score,
+                    "new_concepts": progress.new_concepts,
+                }
+            )
+    return {
+        "points": points,
+        "gamification": _store.get_gamification(profile=profile).to_dict(),
+    }
+
+
+@app.get("/api/personas")
+def api_personas() -> dict[str, Any]:
+    return {
+        "personas": [
+            {
+                "id": persona.id,
+                "label": persona.label,
+                "tone": persona.tone,
+                "tts_rate": persona.tts_rate,
+                "tts_pitch": persona.tts_pitch,
+            }
+            for persona in list_personas()
+        ]
     }
 
 

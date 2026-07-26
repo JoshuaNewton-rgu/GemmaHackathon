@@ -12,7 +12,13 @@ const state = {
   stream: null,
   webcamStream: null,
   signals: { screen: true, camera: true, diff: true, idle: false },
-  tone: "calm",
+  tone: "scottish_granny",
+  plannedDurationMin: 45,
+  plannedEndAt: null,
+  pendingQuizId: null,
+  hasProof: false,
+  breakQuizBusy: false,
+  clockTimer: null,
   breakTimer: null,
   breakEndsAt: null,
   breakTotal: 0,
@@ -39,6 +45,22 @@ const icon = (name, cls = "ic") => {
   return svg;
 };
 const clockOf = (seconds) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
+
+function applyTheme(theme) {
+  const dark = theme === "dark";
+  document.documentElement.dataset.theme = dark ? "dark" : "light";
+  $("theme-icon").setAttribute("href", dark ? "#i-sun" : "#i-moon");
+  $("theme-label").textContent = dark ? "Light" : "Dark";
+  $("theme-toggle").setAttribute("aria-label", `Switch to ${dark ? "light" : "dark"} mode`);
+  $("theme-toggle").setAttribute("aria-pressed", String(dark));
+}
+
+$("theme-toggle").addEventListener("click", () => {
+  const theme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+  applyTheme(theme);
+  try { localStorage.setItem("proofstudy.theme", theme); } catch { /* private mode */ }
+});
+applyTheme(document.documentElement.dataset.theme);
 
 function snack(message, isError = false) {
   const node = el("div", `snackbar${isError ? " err" : ""}`);
@@ -68,8 +90,13 @@ async function api(path, options = {}) {
 /* Drop every trace of the current session from the UI. Used when the session ends,
    when its data is deleted, and when the server tells us it has vanished. */
 function forgetSession() {
+  try { localStorage.removeItem("proofstudy.sessionId"); } catch { /* private mode */ }
   state.sessionId = null;
   state.startedAt = null;
+  state.plannedEndAt = null;
+  state.hasProof = false;
+  clearInterval(state.clockTimer);
+  state.clockTimer = null;
   state.events = [];
   if (state.stream) { state.stream.close(); state.stream = null; }
   stopAllCameras();
@@ -200,19 +227,19 @@ function paintTone() {
 
 function previewToneSpeech() {
   const profile = toneToSpeechProfile(state.tone);
-  const sample = profile.tone === "angry"
-    ? "Get back to work. Focus now."
-    : profile.tone === "blunt"
-      ? "Focus. Start with the next task."
-      : "Take it steady and begin with one small step.";
+  const sample = profile.tone === "angry_father"
+    ? "Enough drifting. Get the next honest step done."
+    : profile.tone === "disappointed_mother"
+      ? "You can do better than avoiding it. Start with one useful step."
+      : "Right, love. One honest page, then we can talk about a break.";
   return playNudgeSpeech(sample);
 }
 
 function toneToSpeechProfile(tone = state.tone) {
   const normalized = String(tone || "").toLowerCase();
-  if (normalized.includes("angry") || normalized.includes("firm") || normalized.includes("sharp")) {
+  if (normalized.includes("father") || normalized === "angry") {
     return {
-      tone: "angry",
+      tone: "angry_father",
       style: "energetic",
       emotion: "angry",
       voice: "en-gb",
@@ -220,21 +247,21 @@ function toneToSpeechProfile(tone = state.tone) {
       rate: 1.06,
     };
   }
-  if (normalized.includes("blunt") || normalized.includes("dry")) {
+  if (normalized.includes("mother") || normalized.includes("calm")) {
     return {
-      tone: "blunt",
-      style: "serious",
-      emotion: "neutral",
+      tone: "disappointed_mother",
+      style: "calm",
+      emotion: "concerned",
       voice: "en-gb",
       pitch: 1.0,
       rate: 0.96,
     };
   }
   return {
-    tone: "calm",
-    style: "calm",
-    emotion: "calm",
-    voice: "en-us",
+    tone: "scottish_granny",
+    style: "warm",
+    emotion: "encouraging",
+    voice: "en-gb",
     pitch: 0.95,
     rate: 0.94,
   };
@@ -247,14 +274,14 @@ function selectBrowserVoice(profile) {
   const list = voices.map((voice) => ({ voice, label: `${voice.name} ${voice.lang}`.toLowerCase() }));
   const lower = (text) => text.toLowerCase();
 
-  if (profile.tone === "angry") {
+  if (profile.tone === "angry_father") {
     const preferred = list.find(({ label }) =>
       label.includes("scottish") || label.includes("glasgow") || label.includes("david") || label.includes("george") || label.includes("en-gb") || label.includes("en-uk")
     );
     return preferred?.voice || list.find(({ label }) => label.includes("en-gb") || label.includes("en-uk"))?.voice || voices[0];
   }
 
-  if (profile.tone === "blunt") {
+  if (profile.tone === "disappointed_mother") {
     const preferred = list.find(({ label }) =>
       label.includes("david") || label.includes("george") || label.includes("daniel") || label.includes("en-gb") || label.includes("en-uk")
     );
@@ -324,6 +351,16 @@ function renderCompiled(contract) {
 $("btn-start").addEventListener("click", async (event) => {
   const done = withBusy(event.target, "starting");
   try {
+    const subject = $("study-subject").value.trim() || state.contract.task;
+    const dueDate = $("study-due-date").value;
+    const durationInput = $("study-duration");
+    const plannedDurationMin = Number(durationInput.value);
+    if (!Number.isInteger(plannedDurationMin) || plannedDurationMin < 5 || plannedDurationMin > 120) {
+      durationInput.setCustomValidity("Enter a whole number from 5 to 120.");
+      durationInput.reportValidity();
+      return;
+    }
+    durationInput.setCustomValidity("");
     const contract = {
       ...state.contract,
       signals: Object.keys(state.signals).filter((name) => state.signals[name]),
@@ -332,11 +369,23 @@ $("btn-start").addEventListener("click", async (event) => {
     const data = await api("/api/session", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ contract }),
+      body: JSON.stringify({
+        contract,
+        study: {
+          subject,
+          due_date: dueDate,
+          planned_duration_min: plannedDurationMin,
+          persona_id: state.tone,
+        },
+      }),
     });
     state.sessionId = data.session_id;
-    state.startedAt = Date.now();
+    state.startedAt = (data.started_at || Date.now() / 1000) * 1000;
+    state.plannedDurationMin = data.study?.planned_duration_min || plannedDurationMin;
+    state.plannedEndAt = (data.planned_end_at || (state.startedAt / 1000 + state.plannedDurationMin * 60)) * 1000;
     state.events = [];
+    state.hasProof = false;
+    try { localStorage.setItem("proofstudy.sessionId", String(state.sessionId)); } catch { /* private mode */ }
     $("nav-watch").disabled = false;
     $("nav-receipt").disabled = false;
     renderArtifactButton(data.contract.artifacts || []);
@@ -356,16 +405,22 @@ $("btn-start").addEventListener("click", async (event) => {
 /* ── the clock ring ─────────────────────────────────────────────────────── */
 
 function startClock() {
+  clearInterval(state.clockTimer);
   const tick = () => {
     if (!state.startedAt) return;
-    const seconds = Math.floor((Date.now() - state.startedAt) / 1000);
-    $("clock").textContent = clockOf(seconds);
-    // A 50-minute session fills the ring; beyond that it simply stays full.
-    const fraction = Math.min(1, seconds / (50 * 60));
+    const total = state.plannedDurationMin * 60;
+    const elapsed = Math.max(0, (Date.now() - state.startedAt) / 1000);
+    const remaining = Math.max(0, (state.plannedEndAt - Date.now()) / 1000);
+    $("clock").textContent = clockOf(remaining);
+    const fraction = Math.min(1, elapsed / total);
     $("ring-fg").setAttribute("stroke-dashoffset", String(503 * (1 - fraction)));
+    if (remaining <= 0) {
+      $("status-text").textContent = "time — upload your notes";
+      showPageAsk("Time is up. Upload a clear photo of your notes to prove the work.");
+    }
   };
   tick();
-  setInterval(tick, 1000);
+  state.clockTimer = setInterval(tick, 1000);
 }
 
 /* ── live feed ──────────────────────────────────────────────────────────── */
@@ -385,7 +440,10 @@ function subscribe(sessionId) {
 function addFeedRow(event) {
   // A request for a page is not something that happened to the student's focus,
   // so it belongs in the card, not in the verdict log.
-  if (event.kind === "ask_notes") return;
+  if (event.kind === "ask_notes") {
+    showPageAsk((event.detail || {}).prompt);
+    return;
+  }
   const feed = $("feed");
   feed.querySelector(".feed-empty")?.remove();
 
@@ -427,7 +485,6 @@ function addFeedRow(event) {
 
   feed.prepend(row);
 
-  if (event.kind === "ask_notes") { showPageAsk(detail.prompt); return; }
   if (event.on_task === false && (detail.nudge || "").length) showNudge(detail.nudge, event.seen);
 }
 
@@ -770,7 +827,18 @@ async function readPage(blob, button) {
       snack(result.problem, true);
       return;
     }
+    state.hasProof = true;
     hidePageAsk();
+    if (result.progress) {
+      $("proof-score").classList.remove("hidden");
+      $("proof-score-number").textContent = result.progress.score;
+      const parts = result.progress.components || {};
+      $("proof-score-breakdown").textContent =
+        `time ${parts.completion || 0}/35 · work ${parts.word_growth || 0}/30 · concepts ${parts.new_concepts || 0}/20 · quality ${parts.diff_verdict || 0}/15`;
+    }
+    if (result.coach?.text) {
+      showNudge(result.coach.text, result.page_note || "your notes");
+    }
     if (result.baseline) {
       snack(`Got it — ${result.page_note || "page read"}. I will compare the next one against this.`);
     } else if (result.diff) {
@@ -825,7 +893,7 @@ $("btn-diff").addEventListener("click", async (event) => {
 async function playNudgeSpeech(text) {
   const profile = toneToSpeechProfile(state.tone);
   try {
-    const response = await fetch("/api/tss", {
+    const response = await fetch("/api/tts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text, voice: profile.voice, style: profile.style, emotion: profile.emotion, speed: 1.0 }),
@@ -868,52 +936,77 @@ $("btn-close-bouncer").addEventListener("click", () => $("ov-bouncer").classList
 
 async function askForBreak() {
   if (!state.sessionId) { snack("Start a session first.", true); return; }
-  $("bouncer-question").textContent = "Thinking of something to ask you…";
+  if (state.breakQuizBusy) return;
+  state.breakQuizBusy = true;
   $("bouncer-source").textContent = "";
   $("bouncer-result").classList.add("hidden");
-  $("bouncer-answer").value = "";
+  $("bouncer-questions").innerHTML =
+    '<div class="hint">Building five questions from work positively matched to your contract…</div>';
   $("ov-bouncer").classList.add("open");
   try {
-    const notes = $("diff-after").value.trim() || null;
-    const { question, source } = await api(`/api/session/${state.sessionId}/break`, {
+    const { quiz_id: quizId, questions, source } = await api(`/api/session/${state.sessionId}/break`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ notes }),
+      body: JSON.stringify({}),
     });
-    $("bouncer-question").textContent = question;
-    $("bouncer-source").textContent = `from ${source || "your own notes"}`;
+    state.pendingQuizId = quizId;
+    $("bouncer-source").textContent = `from ${source || "your contract"}`;
+    const host = $("bouncer-questions");
+    host.innerHTML = "";
+    questions.forEach((item, index) => {
+      const card = el("div", "quiz-question");
+      card.appendChild(el("div", "number", `Question ${index + 1} · ${item.kind || "recall"}`));
+      card.appendChild(el("p", null, item.question));
+      const answer = document.createElement("textarea");
+      answer.dataset.questionId = item.id;
+      answer.placeholder = "Answer from memory";
+      card.appendChild(answer);
+      host.appendChild(card);
+    });
   } catch (error) {
-    $("bouncer-question").textContent = "Could not think of a question just now.";
+    $("bouncer-questions").innerHTML = '<div class="hint">Could not build the quiz just now.</div>';
     snack(error.message, true);
+  } finally {
+    state.breakQuizBusy = false;
   }
 }
 
 $("btn-answer").addEventListener("click", async (event) => {
   const done = withBusy(event.target, "marking");
   try {
+    const answers = Array.from(document.querySelectorAll("#bouncer-questions textarea"))
+      .map((node) => ({ question_id: node.dataset.questionId, answer: node.value }));
     const grade = await api(`/api/session/${state.sessionId}/break/answer`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ answer: $("bouncer-answer").value }),
+      body: JSON.stringify({ quiz_id: state.pendingQuizId, answers }),
     });
     const box = $("bouncer-result");
     box.className = `result ${grade.pass ? "pass" : "fail"}`;
-    $("bouncer-result-title").textContent = grade.pass ? "Passed — off you go" : "Not quite yet";
+    $("bouncer-result-title").textContent = grade.pass
+      ? `Passed ${grade.correct_count}/5 — break unlocked`
+      : `${grade.correct_count}/5 — review first`;
     $("bouncer-result-detail").textContent = grade.feedback || "";
-    if (grade.pass) setTimeout(() => { $("ov-bouncer").classList.remove("open"); startBreak(10); }, 1600);
+    if (grade.coach?.text) void playNudgeSpeech(grade.coach.text);
+    if (grade.break_minutes > 0) {
+      setTimeout(() => {
+        $("ov-bouncer").classList.remove("open");
+        startBreak(grade.break_minutes, grade.coach?.text);
+      }, 1600);
+    }
   } catch (error) {
     snack(error.message, true);
   } finally { done(); }
 });
 
-function startBreak(minutes) {
+function startBreak(minutes, coachLine = "") {
   setBreakState(true);
   state.breakTotal = minutes;
   state.breakEndsAt = Date.now() + minutes * 60000;
   $("break-of").textContent = `of ${minutes} minutes`;
   $("ov-break").classList.add("open");
   const back = new Date(state.breakEndsAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  $("break-line").textContent = `Go and look out a window. I'll come and get you at ${back}.`;
+  $("break-line").textContent = coachLine || `Go and look out a window. I'll come and get you at ${back}.`;
   clearInterval(state.breakTimer);
   state.breakTimer = setInterval(tickBreak, 250);
   tickBreak();
@@ -956,10 +1049,18 @@ $("btn-break-add").addEventListener("click", () => {
 
 $("btn-finish").addEventListener("click", async (event) => {
   if (!state.sessionId) { snack("No session running.", true); return; }
+  if (!state.hasProof) {
+    showPageAsk("Upload a clear photo of the notes from this run before finishing.");
+    snack("Show your notes first — the timer alone is not proof of learning.", true);
+    return;
+  }
   const done = withBusy(event.target, "writing your receipt");
   try {
-    const { receipt } = await api(`/api/session/${state.sessionId}/finish`, { method: "POST" });
-    renderReceipt(receipt);
+    const { receipt, progress, gamification, coach } =
+      await api(`/api/session/${state.sessionId}/finish`, { method: "POST" });
+    renderReceipt(receipt, progress, gamification);
+    if (coach?.text) void playNudgeSpeech(coach.text);
+    try { localStorage.removeItem("proofstudy.sessionId"); } catch { /* private mode */ }
     // The server stops the watch loop on finish; this is the browser's half —
     // close the event stream and every camera before showing the receipt.
     if (state.stream) { state.stream.close(); state.stream = null; }
@@ -973,17 +1074,22 @@ $("btn-finish").addEventListener("click", async (event) => {
   } finally { done(); }
 });
 
-function renderReceipt(receipt) {
+function renderReceipt(receipt, progress = null, gamification = null) {
   const checks = state.events.filter((event) => event.kind === "screen" || event.kind === "camera");
   const drifted = checks.filter((event) => event.on_task === false);
   const diffs = state.events.filter((event) => event.kind === "diff");
   const words = diffs.reduce((total, event) => total + (event.detail.delta_words || 0), 0);
   const minutes = Math.floor((Date.now() - state.startedAt) / 60000);
 
-  $("r-score").textContent = receipt.focus_score;
+  $("r-score").textContent = progress?.score ?? receipt.focus_score;
   $("r-delta").textContent = words > 0 ? `+${words} words` : "";
   $("r-autopsy").textContent = receipt.autopsy;
   $("r-tomorrow").textContent = receipt.tomorrow || "—";
+  if (gamification) {
+    $("r-level").textContent = `Level ${gamification.level}`;
+    $("r-xp").textContent = `${gamification.xp} XP`;
+    $("r-streak-count").textContent = `${gamification.streak_days || 0} day streak`;
+  }
 
   const started = new Date(state.startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   const ended = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -1182,6 +1288,36 @@ $("btn-delete").addEventListener("click", async (event) => {
   } finally { done(); }
 });
 
+async function restoreSession() {
+  let saved = null;
+  try { saved = Number(localStorage.getItem("proofstudy.sessionId")) || null; } catch { /* private mode */ }
+  if (!saved) return;
+  try {
+    const data = await api(`/api/session/${saved}`);
+    state.sessionId = saved;
+    state.contract = data.contract;
+    state.startedAt = data.started_at * 1000;
+    state.plannedDurationMin = data.study?.planned_duration_min || 45;
+    state.plannedEndAt = data.planned_end_at * 1000;
+    state.tone = data.study?.persona_id || "scottish_granny";
+    $("study-subject").value = data.study?.subject || "";
+    $("study-due-date").value = data.study?.due_date || "";
+    $("study-duration").value = String(state.plannedDurationMin);
+    state.events = data.events || [];
+    state.hasProof = !!data.has_notes_proof;
+    $("nav-watch").disabled = false;
+    $("nav-receipt").disabled = false;
+    renderArtifactButton(data.contract.artifacts || []);
+    state.events.forEach(addFeedRow);
+    subscribe(saved);
+    startClock();
+    show("watch");
+  } catch {
+    forgetSession();
+  }
+}
+
 loadStatus();
 paintTone();
 if (window.location.hash.length > 1) show(window.location.hash.slice(1));
+void restoreSession();

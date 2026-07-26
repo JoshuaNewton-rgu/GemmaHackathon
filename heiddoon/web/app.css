@@ -77,6 +77,44 @@
   --e3:0 4px 8px 3px rgba(0,0,0,.15),0 1px 3px rgba(0,0,0,.3);
 }
 
+html[data-theme="dark"]{
+  color-scheme:dark;
+  --primary:#7FDDB6;
+  --on-primary:#003827;
+  --primary-container:#14523E;
+  --on-primary-container:#B6F5D8;
+  --primary-on-dark:#B9E8D2;
+  --primary-on-dark-2:#DDF3E8;
+  --secondary-container:#293B33;
+  --on-secondary-container:#D9E7DF;
+  --on-secondary-strong:#E6F4EC;
+  --on-secondary-dim:#B7C9BE;
+  --tertiary-container:#173B49;
+  --on-tertiary-container:#BFE8F8;
+  --on-tertiary-strong:#D9F3FC;
+  --tertiary:#89D0E7;
+  --tertiary-outline:#79AABA;
+  --error-container:#5E2725;
+  --on-error-container:#FFDAD6;
+  --drift:#FFB4AB;
+  --surface:#101512;
+  --surface-container:#181F1B;
+  --surface-variant:#232B26;
+  --page:#101512;
+  --outline:#8C978F;
+  --outline-variant:#3F4942;
+  --divider:#2B342E;
+  --on-surface:#E4EAE5;
+  --on-surface-variant:#C0C9C2;
+  --on-surface-dim:#98A29A;
+  --dark-surface:#091C15;
+  --dark-container:#183D2F;
+  --dark-outline:#446A59;
+  --e1:0 1px 3px rgba(0,0,0,.55);
+  --e2:0 2px 7px rgba(0,0,0,.6);
+  --e3:0 4px 12px rgba(0,0,0,.7);
+}
+
 *{box-sizing:border-box;margin:0;padding:0}
 
 /* Respect the OS setting. The screen transitions and the pulsing status dot are
@@ -96,7 +134,7 @@
    (#F7FAF6), not the doc's canvas grey. Filled fields are `surface-variant`
    (#E6EBE4) and need something lighter to sit on — with the canvas colour here
    they vanished into the page. */
-body{background:var(--surface);color:var(--on-surface);font-family:var(--sans);font-size:14px;line-height:1.5;min-height:100vh;-webkit-font-smoothing:antialiased}
+body{background:var(--surface);color:var(--on-surface);font-family:var(--sans);font-size:14px;line-height:1.5;min-height:100vh;-webkit-font-smoothing:antialiased;transition:background .18s,color .18s}
 button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
 button:disabled{opacity:.38;cursor:not-allowed}
 svg.ic{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}
@@ -127,6 +165,10 @@ svg.ic.filled{fill:currentColor;stroke:none}
 .model-badge{padding:6px 12px;border-radius:var(--r-chip);background:var(--secondary-container);color:var(--on-secondary-container);font:500 11.5px var(--mono);white-space:nowrap}
 .model-badge.down{background:var(--error-container);color:var(--on-error-container)}
 .model-badge.mock{background:#FFF2C4;color:#3D2E00}
+.theme-toggle{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:5px 10px;border:1px solid var(--outline-variant);border-radius:var(--r-pill);color:var(--on-surface-variant);font:500 12px var(--sans)}
+.theme-toggle:hover{background:var(--surface-variant);color:var(--on-surface)}
+html[data-theme="dark"] .model-badge.mock{background:#544817;color:#FFF2C4}
+html[data-theme="dark"] .icon-btn:hover:not(:disabled){background:rgba(255,255,255,.08)}
 .bar-note{font:400 11.5px var(--mono);color:var(--on-surface-dim)}
 
 .stage{padding:0 28px 56px;max-width:1080px}
@@ -166,7 +208,7 @@ p.body.tight{font-size:14px}
 .btn-outline:hover:not(:disabled){background:rgba(29,106,80,.07)}
 .btn-text{color:var(--primary);padding:11px 14px}
 .btn-text:hover:not(:disabled){background:rgba(29,106,80,.07)}
-.btn-danger{border:1px solid var(--outline);color:#8C1D18}
+.btn-danger{border:1px solid var(--outline);color:var(--drift)}
 .btn-danger:hover:not(:disabled){background:rgba(140,29,24,.07)}
 .btn.block{width:100%}
 .btn.sm{padding:9px 16px;font-size:13px}
@@ -186,9 +228,19 @@ p.body.tight{font-size:14px}
 .field:focus-within{border-bottom-color:var(--primary)}
 .field label{display:block;font:400 11px var(--sans);color:var(--on-surface-variant);margin-bottom:5px}
 .field:focus-within label{color:var(--primary)}
-.field textarea,.field input{width:100%;border:none;background:none;outline:none;resize:vertical;font:400 14px/1.65 var(--sans);color:var(--on-surface)}
+.field textarea,.field input,.field select{width:100%;border:none;background:none;outline:none;resize:vertical;font:400 14px/1.65 var(--sans);color:var(--on-surface)}
 .field textarea::placeholder,.field input::placeholder{color:var(--on-surface-dim)}
 .field-foot{display:flex;justify-content:space-between;gap:12px;padding:6px 16px 0;font:400 11px var(--sans);color:var(--on-surface-variant)}
+.study-setup{grid-template-columns:minmax(180px,1fr) 170px 180px;margin-top:16px}
+@media (max-width:700px){.study-setup{grid-template-columns:1fr}}
+.score-strip{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-top:16px;padding:14px;border-radius:var(--r-inner);background:var(--primary-container);color:var(--on-primary-container)}
+.score-number{font:500 30px/1 var(--sans);margin-right:4px}
+.gamification-line{display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;color:var(--on-secondary-strong)}
+.quiz-list{display:flex;flex-direction:column;gap:12px;margin:18px 0;max-height:55vh;overflow-y:auto;padding-right:4px}
+.quiz-question{padding:14px;border-radius:var(--r-inner);background:var(--surface-container)}
+.quiz-question .number{font:500 11px var(--mono);color:var(--primary);text-transform:uppercase}
+.quiz-question p{font:500 14px/1.45 var(--sans);margin:5px 0 10px}
+.quiz-question textarea{width:100%;min-height:64px;border:1px solid var(--outline-variant);border-radius:10px;padding:10px;background:var(--surface);font:400 14px/1.45 var(--sans);resize:vertical}
 
 /* ── chips ─────────────────────────────────────────────────────────────── */
 

@@ -63,8 +63,23 @@ class MockProvider(Provider):
                 "quality_note": "mock provider",
                 "verdict": "stalled",
             }
+        if '"questions"' in prompt and "key_points" in prompt:
+            return {
+                "questions": [
+                    {
+                        "question": f"MOCK PROVIDER — question {number}",
+                        "key_points": ["mock"],
+                        "kind": ("recall", "fill_blank", "relationship", "recall", "relationship")[number - 1],
+                    }
+                    for number in range(1, 6)
+                ]
+            }
         if "key_points" in prompt:
             return {"question": "MOCK PROVIDER — no model was called", "key_points": ["mock"]}
+        if '"correct"' in prompt and '"feedback"' in prompt:
+            return {"correct": [False] * 5, "feedback": ["MOCK PROVIDER — no model was called"] * 5}
+        if '"text"' in prompt and "Coach persona" in prompt:
+            return {"text": "MOCK PROVIDER — no model was called."}
         if '"pass"' in prompt or "matched_points" in prompt:
             return {"pass": False, "feedback": "MOCK PROVIDER — no model was called", "matched_points": []}
         if "autopsy" in prompt:
