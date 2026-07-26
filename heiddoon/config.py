@@ -49,6 +49,14 @@ class Settings:
     artifact_settle_s: int = 5
     db_path: Path = PROJECT_ROOT / "heiddoon.db"
     timeout_s: float = 180.0
+    tts_enabled: bool = True
+    tts_model: str = "ResembleAI/chatterbox"
+    tts_voice: str = "en-us"
+    tts_style: str = ""
+    tts_emotion: str = ""
+    tts_speed: float = 1.0
+    tts_endpoint: str = ""
+    hf_token: str = ""
 
     @classmethod
     def from_env(cls, load_file: bool = True) -> Settings:
@@ -66,6 +74,14 @@ class Settings:
             artifact_settle_s=int(env.get("HEIDDOON_ARTIFACT_SETTLE_S", "5")),
             db_path=Path(env.get("HEIDDOON_DB", str(PROJECT_ROOT / "heiddoon.db"))),
             timeout_s=float(env.get("HEIDDOON_TIMEOUT_S", "180")),
+            tts_enabled=env.get("HEIDDOON_TTS_ENABLED", "true").strip().lower() not in {"0", "false", "no"},
+            tts_model=env.get("HEIDDOON_TTS_MODEL", "ResembleAI/chatterbox").strip(),
+            tts_voice=env.get("HEIDDOON_TTS_VOICE", "en-us").strip(),
+            tts_style=env.get("HEIDDOON_TTS_STYLE", "serious").strip(),
+            tts_emotion=env.get("HEIDDOON_TTS_EMOTION", "angry").strip(),
+            tts_speed=float(env.get("HEIDDOON_TTS_SPEED", "1.0")),
+            tts_endpoint=env.get("HEIDDOON_TTS_ENDPOINT", "").strip(),
+            hf_token=env.get("HF_TOKEN", env.get("HUGGINGFACE_HUB_TOKEN", "")).strip(),
         )
 
 

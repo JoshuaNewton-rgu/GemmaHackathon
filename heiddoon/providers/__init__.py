@@ -26,7 +26,7 @@ __all__ = [
 #: wrong guess is cheap to fix: every provider exposes `list_models()`, and the
 #: CLI's `doctor` command prints what the configured key can actually reach.
 DEFAULT_MODELS = {
-    "google": "gemma-3-27b-it",
+    "google": "gemma-4-26b-a4b-it",
     #"openai_compat": "google/gemma-3-27b-it",
     "ollama": "gemma4:12b",
     "mock": "mock",

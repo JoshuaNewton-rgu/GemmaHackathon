@@ -12,10 +12,12 @@ from __future__ import annotations
 import asyncio
 import io
 import json
+import os
 import queue
 from pathlib import Path
 from typing import Any
 
+import requests
 from fastapi import FastAPI, HTTPException, Response, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
@@ -112,6 +114,14 @@ class AnswerRequest(BaseModel):
     answer: str
 
 
+class TTSRequest(BaseModel):
+    text: str
+    voice: str | None = None
+    style: str | None = None
+    emotion: str | None = None
+    speed: float | None = None
+
+
 # ── status ──────────────────────────────────────────────────────────────────
 
 
@@ -139,6 +149,61 @@ def _server_capture_available() -> bool:
         return screen_mod.available()
     except Exception:  # noqa: BLE001
         return False
+
+
+def _build_tts_payload(
+    text: str,
+    voice: str | None = None,
+    style: str | None = None,
+    emotion: str | None = None,
+    speed: float | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {"inputs": text, "voice": voice or settings.tts_voice}
+    if style or settings.tts_style:
+        payload["style"] = style or settings.tts_style
+    if emotion or settings.tts_emotion:
+        payload["emotion"] = emotion or settings.tts_emotion
+    if speed is not None or settings.tts_speed != 1.0:
+        payload["speed"] = speed if speed is not None else settings.tts_speed
+    return payload
+
+
+def _synthesize_tts(
+    text: str,
+    voice: str | None = None,
+    style: str | None = None,
+    emotion: str | None = None,
+    speed: float | None = None,
+) -> bytes:
+    if not settings.tts_enabled:
+        raise RuntimeError("TTS is disabled")
+
+    payloads = [
+        _build_tts_payload(text, voice, style, emotion, speed),
+        {"inputs": text},
+        {"inputs": text, "parameters": {"voice": voice or settings.tts_voice}},
+    ]
+    endpoint = settings.tts_endpoint or os.getenv("HEIDDOON_TTS_ENDPOINT") or f"https://router.huggingface.co/hf-inference/models/{settings.tts_model}"
+    headers = {"Accept": "audio/*"}
+    token = settings.hf_token or os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACE_HUB_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    last_error: Exception | None = None
+    for payload in payloads:
+        try:
+            response = requests.post(endpoint, headers=headers, json=payload, timeout=60)
+            response.raise_for_status()
+            content_type = response.headers.get("content-type", "")
+            if response.content and content_type.startswith("audio/"):
+                return response.content
+        except Exception as exc:  # noqa: BLE001
+            last_error = exc
+            continue
+
+    if last_error is not None:
+        raise RuntimeError(str(last_error)) from last_error
+    raise RuntimeError("TTS synthesis failed")
 
 
 @app.get("/api/status")
@@ -208,6 +273,18 @@ def api_get_session(session_id: int) -> dict[str, Any]:
         "events": [event.to_dict() for event in session.events],
         "learner_model": session.learner.to_dict(),
     }
+
+
+@app.post("/api/tss")
+def api_tts(request: TTSRequest) -> Response:
+    text = request.text.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="text is required")
+    try:
+        audio = _synthesize_tts(text, request.voice, request.style, request.emotion, request.speed)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"could not synthesize speech: {exc}") from exc
+    return Response(content=audio, media_type="audio/wav")
 
 
 @app.post("/api/session/{session_id}/finish")

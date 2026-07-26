@@ -500,10 +500,34 @@ $("btn-diff").addEventListener("click", async (event) => {
 
 /* ── nudge, bouncer, break (3b) ─────────────────────────────────────────── */
 
+async function playNudgeSpeech(text) {
+  try {
+    const response = await fetch("/api/tss", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, voice: "en-us" }),
+    });
+    if (!response.ok) throw new Error("speech unavailable");
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    audio.play().catch(() => {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      window.speechSynthesis.speak(utterance);
+    });
+  } catch {
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    window.speechSynthesis.speak(utterance);
+  }
+}
+
 function showNudge(line, seen) {
   $("nudge-line").textContent = line;
   $("nudge-seen").textContent = seen ? `Seen: ${seen}` : "";
   $("ov-nudge").classList.add("open");
+  void playNudgeSpeech(line);
 }
 $("btn-backtoit").addEventListener("click", () => $("ov-nudge").classList.remove("open"));
 $("btn-open-bouncer").addEventListener("click", () => {
