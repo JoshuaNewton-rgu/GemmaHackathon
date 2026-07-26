@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Heid Doon</title>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<div class="app">
+  <nav class="rail">
+    <div class="wordmark">Heid Doon<small>reads your work</small></div>
+    <div class="model-badge" id="model-badge"><span class="dot"></span><span id="model-text">checking…</span></div>
+
+    <button class="nav-btn active" data-screen="contract"><span class="n">1</span> Contract</button>
+    <button class="nav-btn" data-screen="session" id="nav-session" disabled><span class="n">2</span> Session</button>
+    <button class="nav-btn" data-screen="receipt" id="nav-receipt" disabled><span class="n">3</span> Receipt</button>
+    <button class="nav-btn" data-screen="history"><span class="n">4</span> History</button>
+
+    <div class="spacer"></div>
+    <div class="privacy-strip" id="privacy-strip">
+      <b>Privacy</b><span id="privacy-text">…</span>
+    </div>
+  </nav>
+
+  <main class="stage">
+
+    <!-- 1 · CONTRACT -->
+    <section class="screen active" id="scr-contract">
+      <div class="crumb">Step one</div>
+      <h1>Write your contract</h1>
+      <p class="sub">Your rules, in your own words. Everything after this is judged against
+        what you write here — nothing gets added that you did not ask for.</p>
+
+      <div class="card" style="margin-top:20px">
+        <div class="field">
+          <label class="f" for="contract-text">What are you doing, and what counts as on task</label>
+          <textarea id="contract-text" rows="7" placeholder="I'm revising thermodynamics chapter 4 (entropy) until 12:30. Exam Friday — no all-nighter this time. Lecture videos and PDFs about thermodynamics are fine, music is fine, my study group chat is fine when we're discussing the problem set. No social media, no entertainment videos. Track notes_thermo.md. Camera presence on. Kind but sharp."></textarea>
+          <p class="note">Name a file and Heid Doon will judge whether your work actually moved — the one
+            signal that still works when you procrastinate on your phone.</p>
+        </div>
+        <div class="actions">
+          <button class="btn btn-primary" id="btn-compile">Compile my rules</button>
+          <button class="btn btn-ghost btn-sm" id="btn-example">Use the example</button>
+        </div>
+      </div>
+
+      <div class="card hidden" id="contract-preview">
+        <h2>Your rules, as Heid Doon understood them</h2>
+        <div class="row two">
+          <div>
+            <label class="f">Task</label><div id="c-task"></div>
+            <label class="f" style="margin-top:14px">Because</label><div id="c-why" class="sub" style="margin:0"></div>
+          </div>
+          <div>
+            <label class="f">Allowed</label><div class="chips" id="c-allowed"></div>
+            <label class="f" style="margin-top:14px">Drift</label><div class="chips" id="c-blocked"></div>
+            <label class="f" style="margin-top:14px">Signals</label><div class="chips" id="c-signals"></div>
+          </div>
+        </div>
+        <div class="actions">
+          <button class="btn btn-primary" id="btn-start">Heid doon →</button>
+          <button class="btn btn-ghost" id="btn-edit">Change something</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2 · SESSION -->
+    <section class="screen" id="scr-session">
+      <div class="crumb">Session <span id="session-id"></span></div>
+      <h1 id="session-task">…</h1>
+
+      <div class="session-grid" style="margin-top:18px">
+        <div>
+          <div class="card ring-wrap">
+            <div class="ring">
+              <svg width="180" height="180" viewBox="0 0 180 180">
+                <circle cx="90" cy="90" r="78" fill="none" stroke="var(--grid)" stroke-width="12"/>
+                <circle id="ring-fg" cx="90" cy="90" r="78" fill="none" stroke="url(#g)" stroke-width="12"
+                        stroke-linecap="round" stroke-dasharray="490" stroke-dashoffset="490"/>
+                <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stop-color="#3987e5"/><stop offset="1" stop-color="#9085e9"/>
+                </linearGradient></defs>
+              </svg>
+              <div class="t"><div>
+                <div class="big" id="clock">0:00</div>
+                <div class="lbl">elapsed</div>
+              </div></div>
+            </div>
+            <div class="watcher-chip"><span class="pulse" id="pulse"></span><span id="watcher-label">watching</span></div>
+          </div>
+
+          <div class="card" style="margin-top:16px">
+            <h2>Judge a frame</h2>
+            <input type="file" id="frame-file" accept="image/*" class="hidden">
+            <div class="dropzone" id="dropzone">Drop a screenshot here, or click to choose</div>
+            <div class="actions">
+              <button class="btn btn-ghost btn-sm" id="btn-webcam">Use webcam</button>
+              <button class="btn btn-ghost btn-sm" id="btn-snap" disabled>Snap &amp; judge</button>
+            </div>
+            <video id="webcam" class="hidden" autoplay playsinline muted></video>
+          </div>
+
+          <div class="card" style="margin-top:16px">
+            <h2>Ask for a break</h2>
+            <p class="note" style="margin-top:0">One question from your own notes, then the break is yours.</p>
+            <div class="actions"><button class="btn btn-ghost btn-sm" id="btn-break">Can I have ten minutes</button></div>
+          </div>
+        </div>
+
+        <div>
+          <div class="card">
+            <h2>Verdicts</h2>
+            <div class="feed" id="feed"><div class="feed-empty">Nothing yet. Judge a frame, or check your notes below.</div></div>
+          </div>
+
+          <div class="card" style="margin-top:16px">
+            <h2>Did the work actually move</h2>
+            <p class="note" style="margin-top:0">The device-independent signal: it reads the file, not the screen.</p>
+            <div class="actions" id="artifact-actions"></div>
+            <div class="row two" style="margin-top:12px">
+              <div><label class="f" for="diff-before">Notes — earlier</label><textarea id="diff-before" rows="7"></textarea></div>
+              <div><label class="f" for="diff-after">Notes — now</label><textarea id="diff-after" rows="7"></textarea></div>
+            </div>
+            <div class="actions"><button class="btn btn-primary btn-sm" id="btn-diff">Judge my progress</button></div>
+          </div>
+
+          <div class="actions">
+            <button class="btn btn-primary" id="btn-finish">End session &amp; get my receipt</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3 · RECEIPT -->
+    <section class="screen" id="scr-receipt">
+      <div class="crumb">Session over</div>
+      <h1>Your receipt</h1>
+      <p class="sub">Generated from what actually happened, not from what you meant to do.</p>
+
+      <div class="tiles" style="margin-top:20px">
+        <div class="tile"><div class="lbl">Focus score</div><div class="val" id="r-score">–</div><div class="sub">out of 100</div></div>
+        <div class="tile"><div class="lbl">Check-ins</div><div class="val" id="r-checks">–</div><div class="sub" id="r-drift">–</div></div>
+        <div class="tile"><div class="lbl">Words added</div><div class="val" id="r-words">–</div><div class="sub" id="r-quality">–</div></div>
+        <div class="tile"><div class="lbl">Elapsed</div><div class="val" id="r-elapsed">–</div><div class="sub">minutes</div></div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <h2>The session, end to end</h2>
+        <div class="tl" id="r-timeline"></div>
+        <div class="tl-legend">
+          <span class="k"><span class="sw" style="background:var(--good)"></span> on task</span>
+          <span class="k"><span class="sw" style="background:var(--serious)"></span> drift</span>
+          <span class="k"><span class="sw" style="background:var(--accent)"></span> work checked</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Drift autopsy</h2>
+        <div class="autopsy" id="r-autopsy">–</div>
+        <div class="tomorrow"><div class="txt" id="r-tomorrow">–</div></div>
+      </div>
+
+      <div class="card">
+        <h2>What Heid Doon now knows about you</h2>
+        <p class="note" style="margin-top:0">Saved between sessions — this is what shapes tomorrow.</p>
+        <pre class="json" id="r-learner">–</pre>
+      </div>
+
+      <div class="actions"><button class="btn btn-ghost" id="btn-again">Start another session</button></div>
+    </section>
+
+    <!-- 4 · HISTORY -->
+    <section class="screen" id="scr-history">
+      <div class="crumb">Across days</div>
+      <h1>History</h1>
+      <p class="sub">The part a one-session demo cannot show: what persists.</p>
+      <div class="card" style="margin-top:20px">
+        <h2>Recent sessions</h2>
+        <div id="h-sessions" class="feed"></div>
+      </div>
+      <div class="card">
+        <h2>Learner model</h2>
+        <pre class="json" id="h-learner">–</pre>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- nudge -->
+<div class="overlay" id="ov-nudge">
+  <div class="nudge-card">
+    <div class="avatar">👀</div>
+    <div class="nudge-tag">Drift caught</div>
+    <div class="nudge-line" id="nudge-line"></div>
+    <div class="nudge-why" id="nudge-seen"></div>
+    <div class="nudge-actions">
+      <button class="btn btn-primary" id="btn-backtoit">Right — back to it</button>
+      <button class="btn btn-ghost" id="btn-open-bouncer">Actually, I need a break</button>
+    </div>
+  </div>
+</div>
+
+<!-- bouncer -->
+<div class="overlay" id="ov-bouncer">
+  <div class="nudge-card bouncer">
+    <div class="avatar">🎟️</div>
+    <div class="nudge-tag" style="color:var(--accent)">The Bouncer</div>
+    <div class="nudge-line">One question, then the break is yours</div>
+    <div class="bouncer-q">
+      <div class="q" id="bouncer-question">…</div>
+      <div class="src">from your own notes</div>
+    </div>
+    <textarea id="bouncer-answer" rows="4" style="margin-top:12px" placeholder="From memory — a rough version of the idea is fine."></textarea>
+    <div class="grant hidden" id="grant-msg"></div>
+    <div class="nudge-actions">
+      <button class="btn btn-primary" id="btn-answer">Submit</button>
+      <button class="btn btn-ghost" id="btn-close-bouncer">Never mind</button>
+    </div>
+  </div>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>

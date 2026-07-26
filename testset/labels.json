@@ -1,0 +1,35 @@
+{
+  "_readme": [
+    "Labelled frames for the verdict eval.",
+    "",
+    "'source' is load-bearing — the harness scores the two kinds separately:",
+    "  synthetic — a rendered mock-up. The model reads its caption text, so these",
+    "              prove the pipeline runs and prove NOTHING about real screen",
+    "              understanding. Never quotable.",
+    "  real      — an actual capture from a real machine. Only these count.",
+    "",
+    "'case' is 'hard' when a title/URL blocklist would get it wrong. That subset is",
+    "the whole argument for using a multimodal model, so it is reported separately."
+  ],
+
+  "pdf_notes.png":   {"on_task": true,  "kind": "screen", "case": "easy", "source": "synthetic", "note": "correct module PDF"},
+  "yt_lecture.png":  {"on_task": true,  "kind": "screen", "case": "hard", "source": "synthetic", "note": "video site BUT a lecture — title-blockers fail this"},
+  "yt_cats.png":     {"on_task": false, "kind": "screen", "case": "easy", "source": "synthetic", "note": "video site, entertainment"},
+  "social_feed.png": {"on_task": false, "kind": "screen", "case": "easy", "source": "synthetic", "note": "social feed"},
+  "wrong_pdf.png":   {"on_task": false, "kind": "screen", "case": "hard", "source": "synthetic", "note": "a PDF — but the WRONG module"},
+  "chat_class.png":  {"on_task": true,  "kind": "screen", "case": "hard", "source": "synthetic", "note": "chat app — but discussing the problem set"},
+
+  "real_notes_editor.png":     {"on_task": true,  "kind": "screen", "case": "easy", "source": "real", "note": "CAPTURE: your editor with the actual notes file open"},
+  "real_lecture_video.png":    {"on_task": true,  "kind": "screen", "case": "hard", "source": "real", "note": "CAPTURE: a real lecture playing on a real video site"},
+  "real_entertainment.png":    {"on_task": false, "kind": "screen", "case": "easy", "source": "real", "note": "CAPTURE: a real entertainment video page"},
+  "real_social_feed.png":      {"on_task": false, "kind": "screen", "case": "easy", "source": "real", "note": "CAPTURE: a real social feed"},
+  "real_wrong_module_pdf.png": {"on_task": false, "kind": "screen", "case": "hard", "source": "real", "note": "CAPTURE: a real PDF for a DIFFERENT module"},
+  "real_class_chat.png":       {"on_task": true,  "kind": "screen", "case": "hard", "source": "real", "note": "CAPTURE: real chat that is about the coursework"},
+  "real_docs_search.png":      {"on_task": true,  "kind": "screen", "case": "hard", "source": "real", "note": "CAPTURE: search results for the contracted topic"},
+  "real_shopping.png":         {"on_task": false, "kind": "screen", "case": "hard", "source": "real", "note": "CAPTURE: a shopping or news page — off task, but not a classic blocked site"},
+
+  "real_at_desk.jpg":       {"on_task": true,  "kind": "camera", "case": "easy", "source": "real", "note": "CAPTURE: webcam, you working at the desk"},
+  "real_phone_in_hand.jpg": {"on_task": false, "kind": "camera", "case": "hard", "source": "real", "note": "CAPTURE: webcam, phone in hand"},
+  "real_empty_chair.jpg":   {"on_task": false, "kind": "camera", "case": "easy", "source": "real", "note": "CAPTURE: webcam, nobody there"},
+  "real_reading_paper.jpg": {"on_task": true,  "kind": "camera", "case": "hard", "source": "real", "note": "CAPTURE: webcam, reading paper notes away from the screen — the case a naive 'eyes on screen' rule gets wrong"}
+}

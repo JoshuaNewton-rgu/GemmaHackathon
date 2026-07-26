@@ -1,0 +1,5 @@
+{"task": "thermodynamics chapter 4 (entropy)",
+ "allowed": ["lecture videos", "thermodynamics PDFs and docs", "music", "study-group chat about the problem set"],
+ "blocked": ["social media", "entertainment video", "shorts"],
+ "artifacts": ["notes_thermo.md"], "signals": ["screen", "camera", "diff"],
+ "tone": "kind_but_sharp", "ends": "12:30"}

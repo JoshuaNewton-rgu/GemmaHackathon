@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "heiddoon"
+version = "0.1.0"
+description = "A study companion that reads your work, not just your screen."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "requests>=2.31",
+    "pillow>=10.0",
+]
+
+[project.optional-dependencies]
+# The local watcher: screen, camera and desktop notifications.
+watch = ["mss>=9.0", "opencv-python>=4.8", "plyer>=2.1"]
+# The web app.
+web = ["fastapi>=0.110", "uvicorn[standard]>=0.27", "python-multipart>=0.0.9"]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+heiddoon = "heiddoon.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["heiddoon*"]
+
+[tool.setuptools.package-data]
+heiddoon = ["web/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 118
+target-version = "py310"

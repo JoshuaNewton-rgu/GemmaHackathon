@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+
+# Secrets.
+.env
+
+# Local session data: verdicts and snapshots of your own notes. Never commit it.
+heiddoon.db
+events.jsonl
+
+# Eval output is regenerated; the committed number lives in the writeup.
+eval_results.json
+eval_mock.json
