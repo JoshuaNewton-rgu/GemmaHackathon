@@ -70,7 +70,7 @@
         <div>
           <div class="field">
             <label for="contract-text">What is today for</label>
-            <textarea id="contract-text" rows="7" maxlength="600" placeholder="Two hours on the Ch.4 problem set. Lecture slides, the textbook PDF and my notes file are fine. No football, no Discord. I'm writing into ch4-notes.md. This is the chapter I keep dodging and the exam is Thursday."></textarea>
+            <textarea id="contract-text" rows="7" maxlength="600" placeholder="Two hours on compilers — tokenisation. Lecture videos, the course PDFs and regex docs are fine. No social media, no entertainment video. I'm writing into notes_tokenising.md. The lexer is the part I keep putting off and the coursework is due Friday."></textarea>
           </div>
           <div class="field-foot">
             <span>Plain words. It will quote you back.</span>
@@ -180,6 +180,14 @@
             <p class="hint" style="margin-top:10px" id="auto-stats">
               Unchanged screens are skipped, so reading one page costs nothing.
             </p>
+
+            <div class="eyebrow dim" style="margin-top:16px">Pace</div>
+            <div class="segmented" id="pace" style="margin-top:8px">
+              <button data-cadence="60">Normal</button>
+              <button data-cadence="20">Brisk</button>
+              <button data-cadence="5">Demo</button>
+            </div>
+            <p class="hint" style="margin-top:6px" id="pace-note"></p>
             <details style="margin-top:12px">
               <summary class="hint" style="cursor:pointer">Check something now</summary>
               <div class="actions pair" style="margin-top:10px">
@@ -354,6 +362,12 @@
             <svg class="ic"><use href="#i-doc"/></svg>
             <span class="txt"><span class="name">Verdicts and word counts</span>
               <span class="desc" id="privacy-db">…</span></span>
+            <span class="badge kept">kept</span>
+          </div>
+          <div class="row">
+            <svg class="ic"><use href="#i-draw"/></svg>
+            <span class="txt"><span class="name">Excerpts of your own writing</span>
+              <span class="desc" id="privacy-excerpts">…</span></span>
             <span class="badge kept">kept</span>
           </div>
           <div class="row">

@@ -162,6 +162,11 @@ class Verdict(_Base):
     reason: str = ""
     nudge: str = ""
     confidence: str = "medium"
+    #: The student's own visible writing, read out of the same frame. This is what
+    #: makes progress and retrieval questions work with no file configured — the
+    #: screen is already being captured, so reading it costs one field, not one call.
+    work_text: str = ""
+    work_source: str = ""
 
     @classmethod
     def from_model(cls, raw: dict[str, Any]) -> Verdict:
@@ -176,6 +181,8 @@ class Verdict(_Base):
             reason=_str(raw.get("reason"), "", "reason", repairs),
             nudge=_str(raw.get("nudge", ""), "", "nudge", repairs),
             confidence=_enum(raw.get("confidence", "medium"), ("low", "medium", "high"), "medium", "confidence", repairs),
+            work_text=_str(raw.get("work_text", ""), "", "work_text", repairs),
+            work_source=_str(raw.get("work_source", ""), "", "work_source", repairs),
             _repairs=repairs,
         )
 

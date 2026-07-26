@@ -21,6 +21,11 @@ on-task for *you*, and which file you're working in. Then four signals feed one 
 | **Camera** | Are you here, and is there a phone in your hand? | one vision call |
 | **Artifact** | Did the work actually move? | one text call, only when the file changed |
 | **Page** | What is on your paper notes, and has it grown? | one vision call, at most once per interval |
+
+The bundled contract and test set are set up for **compilers — lexical analysis and
+tokenisation**. `testset/labels.json` labels frames against `contract.json`, so the two
+have to change topic together; `python testset/make_synthetic.py` regenerates the
+synthetic frames if you re-theme it.
 | **Idle** | Are you at the machine at all? | free — no model |
 
 The screen signal runs **automatically** once a session starts. You do not press
@@ -111,8 +116,8 @@ that's permanently a minute behind.
 ## Use it
 
 ```bash
-python -m heiddoon contract "I'm revising entropy until 12:30. Lectures and PDFs are fine, no
-social media. Track notes_thermo.md. Camera on." --out contract.json
+python -m heiddoon contract "Two hours on compilers — tokenisation. Lecture videos, the course
+PDFs and regex docs are fine, no social media. Track notes_tokenising.md. Camera on."   --out contract.json
 
 python -m heiddoon serve            # the web app on http://127.0.0.1:8000
 python -m heiddoon watch            # the local watcher, against your real screen
@@ -183,6 +188,6 @@ tests/           42 tests, no network, no model, no GPU
 - **Idle detection is Windows-only** so far. Elsewhere it returns 0, which means "assume they're
   here" — the safe direction.
 - **The diff can be gamed** by typing filler into your own notes. At which point the model flags
-  padding, and you are, at minimum, typing about thermodynamics.
+  padding, and you are, at minimum, typing about tokenisation.
 - Screen *perception* has prior art (Rewind, Screenpipe). The contribution here is the behavioural
   loop for learners, not the perception.

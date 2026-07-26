@@ -1,5 +1,6 @@
-{"task": "thermodynamics chapter 4 (entropy)",
- "allowed": ["lecture videos", "thermodynamics PDFs and docs", "music", "study-group chat about the problem set"],
+{"task": "compilers — lexical analysis and tokenisation",
+ "why": "coursework due Friday and the lexer is the part I keep putting off",
+ "allowed": ["lecture videos about compilers or lexing", "compiler course PDFs and the dragon book", "language and regex documentation", "music", "study-group chat about the coursework"],
  "blocked": ["social media", "entertainment video", "shorts"],
- "artifacts": ["notes_thermo.md"], "signals": ["screen", "camera", "diff"],
+ "artifacts": ["notes_tokenising.md"], "signals": ["screen", "camera", "diff"],
  "tone": "kind_but_sharp", "ends": "12:30"}

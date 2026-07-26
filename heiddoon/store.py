@@ -308,11 +308,21 @@ class Store:
                 "WHERE s.profile = ? AND e.kind IN ('screen', 'camera')",
                 (profile,),
             ).fetchone()["n"]
+            # Excerpts read off the screen are counted apart from file snapshots:
+            # the student chose to have a file tracked, but work read from whatever
+            # happened to be on screen is a different kind of keeping, and the
+            # privacy screen has to say so in its own words.
+            excerpts = connection.execute(
+                "SELECT COUNT(*) AS n FROM snapshots p JOIN sessions s ON s.id = p.session_id "
+                "WHERE s.profile = ? AND p.path LIKE 'screen:%'",
+                (profile,),
+            ).fetchone()["n"]
         return {
             "sessions": int(sessions),
             "events": int(events),
             "snapshots": int(snapshots),
             "verdicts": int(verdicts),
+            "screen_excerpts": int(excerpts),
         }
 
     def export_all(self, *, profile: str = "default") -> dict[str, Any]:

@@ -1,22 +1,40 @@
-# Thermodynamics — Chapter 4 revision notes
+# Compilers — lexical analysis (tokenisation)
 
-## Entropy basics
-- S = k ln W (statistical definition)
-- dS = δQ_rev / T (classical definition, state function)
+## What a lexer is for
+- Turns a flat character stream into a stream of **tokens**.
+- Token = (kind, lexeme, source position). Kind is what the parser cares about.
+- Lexeme = the exact characters matched. `count`, `42`, `>=` are lexemes.
 
-## Clausius inequality
-∮ δQ/T ≤ 0 for any cycle, equality iff reversible.
+## Vocabulary I keep mixing up
+- **Lexeme** — the raw text matched.
+- **Token** — the classified pair the parser receives.
+- **Pattern** — the rule (usually a regex) describing the lexeme set.
 
-## Ideal gas entropy change
-ΔS = nCv ln(T2/T1) + nR ln(V2/V1)
+## Regular languages → DFA
+Each token pattern is a regular expression, so the whole lexer is one NFA
+(union of all patterns) converted to a DFA by subset construction. That is why
+lexing is linear in input length: one state transition per character, no backtracking.
 
-### Worked example 4.2 — isothermal expansion
-Isothermal so the temperature term vanishes: ΔS = nR ln(V2/V1).
-For n=2 mol doubling volume: ΔS = 2 × 8.314 × ln 2 = 11.5 J/K. Positive, as expected.
+## Maximal munch (the longest-match rule)
+At each position, take the **longest** lexeme that matches any pattern.
+Without it `>=` would lex as `>` then `=`, and `!=` as `!` then `=`.
 
-### Worked example 4.3 — free expansion
-No heat exchanged, but entropy STILL increases (irreversible): same ΔS = nR ln(V2/V1)
-because S is a state function — path doesn't matter, only endpoints. Key exam trap.
+### Worked example — `x>=42`
+| pos | longest match | token |
+|---|---|---|
+| 0 | `x` | IDENT("x") |
+| 1 | `>=` not `>` | OP(GE) |
+| 3 | `42` not `4` | INT(42) |
 
-## Entropy generation
-σ ≥ 0 always; σ = 0 iff reversible. This is the arrow-of-time statement.
+Three tokens, not five. Greedy at each step, but never across a token boundary.
+
+## Ties: same length, two patterns
+Break by **rule order** — first pattern declared wins.
+This is how keywords work: `while` matches both KEYWORD and IDENT, both length 5,
+and KEYWORD is declared first. Otherwise every keyword would arrive as an identifier.
+
+### Where maximal munch bites
+- C's `x---y`: munched as `x-- - y`, which then fails to parse. The lexer is happy;
+  the parser is not. Longest match is a *lexical* decision made with no grammar context.
+- Nested generics `List<List<int>>` — `>>` munches as a shift operator. Real compilers
+  special-case this in the parser rather than the lexer.
