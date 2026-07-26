@@ -131,6 +131,16 @@ def cmd_contract(args: argparse.Namespace) -> int:
 # ── eval ────────────────────────────────────────────────────────────────────
 
 
+def cmd_capture(args: argparse.Namespace) -> int:
+    from .capture import capture_frame, print_status
+
+    testset = Path(args.testset)
+    if args.list or not args.name:
+        print_status(testset)
+        return 0
+    return capture_frame(args.name, testset, delay=args.delay, camera=args.camera)
+
+
 def cmd_eval(args: argparse.Namespace) -> int:
     from .evaluate import run_eval
 
@@ -182,6 +192,14 @@ def build_parser() -> argparse.ArgumentParser:
     contract.add_argument("text", nargs="?", help="the student's own words (or pipe on stdin)")
     contract.add_argument("--out", help="write the compiled contract here")
     contract.set_defaults(func=cmd_contract)
+
+    capture = subparsers.add_parser("capture", help="capture a real frame for the eval test set")
+    capture.add_argument("name", nargs="?", help="label name, or any unique part of it")
+    capture.add_argument("--testset", default=str(DEFAULT_TESTSET))
+    capture.add_argument("--delay", type=int, default=5, help="countdown seconds before the grab")
+    capture.add_argument("--camera", action="store_true", help="force a webcam frame")
+    capture.add_argument("--list", action="store_true", help="show what is captured and what is missing")
+    capture.set_defaults(func=cmd_capture)
 
     evaluate = subparsers.add_parser("eval", help="score the labelled frame set")
     evaluate.add_argument("--testset", default=str(DEFAULT_TESTSET))
