@@ -54,6 +54,17 @@ class Settings:
     #: Use the interpretable fuzzy rule layer rather than a single binary verdict.
     #: On by default: it is the product's decision-making, not an experiment beside it.
     interpretable: bool = True
+    #: Have the model phrase each nudge. Turning this off uses the model-free line,
+    #: which quotes the student's own stated reason back at them — the same thing the
+    #: prompt is asked to do. Worth knowing before switching it off for speed: on this
+    #: hosted backend the phrasing call costs 20-77s, because Gemma 4 reasons before
+    #: answering and the thinking budget cannot be set to zero. The tone is a little
+    #: better with the model; the difference is smaller than the wait.
+    write_nudge: bool = True
+    #: Grade break answers by key-point overlap rather than by asking the model. This
+    #: is the same path used when the model is unreachable, so it is a supported way to
+    #: grade rather than a fake one — it just cannot give warm, specific feedback.
+    fast_grade: bool = False
     #: Minutes between automatic progress checks on work read off the screen. Each
     #: one is a text call, and a student typing continuously would otherwise trigger
     #: one every cadence, so this is the throttle that makes always-on affordable.
@@ -92,6 +103,8 @@ class Settings:
             artifact_settle_s=int(env.get("HEIDDOON_ARTIFACT_SETTLE_S", "5")),
             auto_cadence_s=int(env.get("HEIDDOON_AUTO_CADENCE_S", "60")),
             interpretable=env.get("HEIDDOON_INTERPRETABLE", "1").strip() not in ("0", "false", "no"),
+            write_nudge=env.get("HEIDDOON_WRITE_NUDGE", "1").strip() not in ("0", "false", "no"),
+            fast_grade=env.get("HEIDDOON_FAST_GRADE", "0").strip() not in ("0", "false", "no"),
             progress_every_min=int(env.get("HEIDDOON_PROGRESS_EVERY_MIN", "5")),
             notes_prompt_every_min=int(env.get("HEIDDOON_NOTES_PROMPT_EVERY_MIN", "25")),
             db_path=Path(env.get("HEIDDOON_DB", str(PROJECT_ROOT / "heiddoon.db"))),

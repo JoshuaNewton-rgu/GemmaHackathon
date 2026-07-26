@@ -69,8 +69,15 @@ def ask_question(
     return quiz, meta
 
 
-def grade_answer(provider: Provider, quiz: Quiz, answer: str) -> tuple[Grade, CallMeta]:
-    """Grade a recall answer, with a model-free path for the obvious cases."""
+def grade_answer(
+    provider: Provider, quiz: Quiz, answer: str, *, fast: bool = False
+) -> tuple[Grade, CallMeta]:
+    """Grade a recall answer, with a model-free path for the obvious cases.
+
+    `fast` takes the key-point overlap path deliberately rather than only when the
+    model is unreachable. It is the same arithmetic either way — what is lost is the
+    warm, specific feedback the model writes, not the correctness of the pass or fail.
+    """
     answer = (answer or "").strip()
     no_call = CallMeta(provider=provider.name, model=provider.model, latency_s=0.0, attempts=0, ok=True)
 
@@ -82,6 +89,11 @@ def grade_answer(provider: Provider, quiz: Quiz, answer: str) -> tuple[Grade, Ca
             ),
             no_call,
         )
+
+    if fast:
+        grade = _overlap_grade(quiz, answer)
+        grade._repairs.append("graded by key-point overlap (fast grading is on)")
+        return grade, no_call
 
     raw, meta = provider.complete_json(
         prompts.render(

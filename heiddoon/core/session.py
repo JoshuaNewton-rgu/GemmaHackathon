@@ -117,6 +117,7 @@ class Session:
             started_at=self.started_at,
             last_break_at=self._last_break_at,
             kind=kind,
+            write_line=self.settings.write_nudge,
         )
         self.last_trace = outcome.to_dict()
 
@@ -522,7 +523,9 @@ class Session:
         target = quiz or self._pending_quiz
         if target is None:
             return Grade(passed=False, feedback="Ask for a break first and I will ask you something.")
-        grade, _ = bouncer.grade_answer(self.provider, target, answer)
+        grade, _ = bouncer.grade_answer(
+            self.provider, target, answer, fast=self.settings.fast_grade
+        )
         self._record(
             Event(
                 kind="quiz",
