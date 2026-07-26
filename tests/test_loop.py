@@ -442,7 +442,13 @@ class TestExportAndDelete:
         assert removed["events"] == 1
         assert removed["snapshots"] == 1
 
-        assert session.store.counts() == {"sessions": 0, "events": 0, "snapshots": 0, "verdicts": 0}
+        assert session.store.counts() == {
+            "sessions": 0,
+            "events": 0,
+            "snapshots": 0,
+            "verdicts": 0,
+            "screen_excerpts": 0,
+        }
         assert session.store.get_learner().weak_topics == []
         assert session.store.recent_sessions() == []
 
@@ -657,6 +663,78 @@ class TestPaperNotes:
         assert diff.delta_words == 40  # counted from the transcriptions, not guessed
         diff_events = [event for event in session.events if event.kind == "diff"]
         assert diff_events[0].detail["source"] == "paper"
+
+    def test_work_read_off_the_screen_reaches_the_bouncer(self, session, monkeypatch):
+        """The gap this closes: someone typing in an editor produced no content.
+
+        Progress and retrieval both needed the student's writing, and the only routes
+        to it were a file named in the contract that actually existed on disk, or a
+        photograph of paper. The ordinary case — an editor open on screen — gave the
+        Bouncer nothing to ask about. The verdict now reads the work from the frame it
+        was already judging.
+        """
+        from heiddoon.core import verdict as verdict_mod
+        from heiddoon.core.session import SCREEN_WORK_PATH
+        from heiddoon.schemas import Verdict
+
+        written = (
+            "Maximal munch takes the longest lexeme at each position, so >= lexes as one "
+            "token rather than > followed by =, and ties are broken by rule order."
+        )
+        monkeypatch.setattr(
+            verdict_mod,
+            "judge_frame",
+            lambda *a, **k: (Verdict(on_task=True, seen="editor", work_text=written), None),
+        )
+        session.judge_frame(object(), kind="screen")
+
+        assert session.store.latest_snapshot(session.id, SCREEN_WORK_PATH)["content"] == written
+        quiz = session.request_break()
+        assert quiz.source == "your own notes"
+        assert "Maximal munch" in session.provider.calls[-1]
+
+    def test_a_stray_line_is_not_kept_as_work(self, session, monkeypatch):
+        """A window title is not something to build a retrieval question from."""
+        from heiddoon.core import verdict as verdict_mod
+        from heiddoon.core.session import SCREEN_WORK_PATH
+        from heiddoon.schemas import Verdict
+
+        monkeypatch.setattr(
+            verdict_mod,
+            "judge_frame",
+            lambda *a, **k: (Verdict(on_task=True, seen="editor", work_text="notes.md"), None),
+        )
+        session.judge_frame(object(), kind="screen")
+        assert session.store.latest_snapshot(session.id, SCREEN_WORK_PATH) is None
+
+    def test_the_excerpt_is_not_put_in_the_event_log(self, session, monkeypatch):
+        """Events are a summary a student might skim; content belongs in snapshots,
+        where the privacy screen accounts for it by name."""
+        from heiddoon.core import verdict as verdict_mod
+        from heiddoon.schemas import Verdict
+
+        secret = "my own private writing " * 10
+        monkeypatch.setattr(
+            verdict_mod,
+            "judge_frame",
+            lambda *a, **k: (Verdict(on_task=True, seen="editor", work_text=secret), None),
+        )
+        session.judge_frame(object(), kind="screen")
+        event = session.events[0]
+        assert "my own private writing" not in json.dumps(event.detail)
+        assert event.detail["read_work"] is True
+
+    def test_screen_excerpts_are_counted_separately_for_the_privacy_screen(self, session, monkeypatch):
+        from heiddoon.core import verdict as verdict_mod
+        from heiddoon.schemas import Verdict
+
+        monkeypatch.setattr(
+            verdict_mod,
+            "judge_frame",
+            lambda *a, **k: (Verdict(on_task=True, seen="editor", work_text="word " * 40), None),
+        )
+        session.judge_frame(object(), kind="screen")
+        assert session.store.counts()["screen_excerpts"] == 1
 
     def test_the_bouncer_can_see_a_photographed_page(self, session, monkeypatch):
         """The bug the user hit: a photographed page was invisible to the Bouncer.

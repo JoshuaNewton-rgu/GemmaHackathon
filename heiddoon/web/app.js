@@ -337,6 +337,11 @@ function addFeedRow(event) {
   } else {
     txt.appendChild(el("span", "what", event.seen || event.kind));
     txt.appendChild(el("span", "why", detail.nudge || detail.reason || ""));
+    // Visible proof it is reading the work and not just classifying the window —
+    // which is the difference between a blocker and a study companion.
+    if (detail.read_work) {
+      txt.appendChild(el("span", "why", `Read your work${detail.work_source ? ` — ${detail.work_source}` : ""}`));
+    }
   }
   row.appendChild(txt);
 
@@ -1021,6 +1026,7 @@ async function loadPrivacy() {
     $("privacy-lede").textContent = data.lede;
     $("privacy-frames").textContent = data.frames;
     $("privacy-db").textContent = data.database;
+    $("privacy-excerpts").textContent = data.excerpts;
     $("privacy-network").textContent = data.network;
     const badge = $("privacy-network-badge");
     badge.textContent = data.network_badge;

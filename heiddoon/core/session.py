@@ -28,6 +28,14 @@ from . import (
 
 Listener = Callable[[Event], None]
 
+#: Pseudo-path for work read off the screen. The `screen:` prefix keeps it from ever
+#: colliding with a real file, the same trick `paper:` uses for photographed pages.
+SCREEN_WORK_PATH = "screen:work"
+
+#: Below this an excerpt is a window title or a stray line, not something to build a
+#: retrieval question from.
+MIN_WORK_WORDS = 15
+
 
 class Session:
     """One study session, persisted as it goes."""
@@ -97,10 +105,33 @@ class Session:
                     "nudge": result.nudge,
                     "confidence": result.confidence,
                     "latency_s": result._meta.get("latency_s"),
+                    # The excerpt itself is not put in the event log: events are a
+                    # summary a student might skim, and content belongs in snapshots
+                    # where the privacy screen accounts for it.
+                    "read_work": bool(result.work_text.strip()),
+                    "work_source": result.work_source,
                 },
             )
         )
+        self._keep_work_excerpt(result)
         return result
+
+    def _keep_work_excerpt(self, result: Verdict) -> None:
+        """Store what the student was visibly writing, read from the same frame.
+
+        This closes the gap that made the Bouncer useless in practice. Progress and
+        retrieval questions both needed the student's *content*, and until now the
+        only routes to it were a file named in the contract that actually existed on
+        disk, or a photograph of paper. Someone typing in an editor — the ordinary
+        case — produced no content at all, so there was nothing to ask about.
+
+        The screen is already being captured, so reading it costs one extra field on
+        a call that was happening anyway rather than a second call.
+        """
+        excerpt = result.work_text.strip()
+        if len(excerpt.split()) < MIN_WORK_WORDS:
+            return
+        self.store.add_snapshot(self.id, SCREEN_WORK_PATH, excerpt)
 
     def note_idle(self, idle_s: int, screen_unchanged: bool) -> Event | None:
         """F10 — cheap signal: an unchanged screen plus no input means you are elsewhere.
@@ -332,9 +363,10 @@ class Session:
         """
         candidates: list[dict[str, Any]] = []
 
-        paper = self.store.latest_snapshot(self.id, notes_mod.PAPER_PATH)
-        if paper:
-            candidates.append(paper)
+        for pseudo in (notes_mod.PAPER_PATH, SCREEN_WORK_PATH):
+            snapshot = self.store.latest_snapshot(self.id, pseudo)
+            if snapshot:
+                candidates.append(snapshot)
         for artifact in self.contract.artifacts:
             snapshot = self.store.latest_snapshot(self.id, str(Path(artifact).expanduser()))
             if snapshot:

@@ -554,6 +554,17 @@ def api_privacy(profile: str = "default") -> dict[str, Any]:
         "frames": frames,
         "database": f"{settings.db_path.name} — {counts['verdicts']} frame verdicts, "
         f"{counts['snapshots']} note snapshots, in your own folder",
+        # Named explicitly rather than folded into "snapshots". Reading the work off
+        # the screen is what makes the quizzes and progress work without configuring
+        # anything, and it is also the most surprising thing the app keeps — so it
+        # gets its own line, with its own count, and its own delete.
+        "excerpts": (
+            f"{counts['screen_excerpts']} short "
+            f"{'excerpt' if counts['screen_excerpts'] == 1 else 'excerpts'} of your own writing, read "
+            f"from frames already being judged and kept as text so questions come from your real work"
+            if counts["screen_excerpts"]
+            else "None kept yet — excerpts appear once a frame shows your own writing"
+        ),
         "network": (
             "Open weights, no account, works offline"
             if is_local

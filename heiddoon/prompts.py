@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-PROMPT_VERSION = "2026-07-26.2"
+PROMPT_VERSION = "2026-07-26.3"
 
 
 CONTRACT_COMPILER = """A student is starting a study session and has described it in their own words.
@@ -58,13 +58,22 @@ If they are off task, write ONE nudge line: warm, short, no shame, no exclamatio
 marks, no questions. Where it fits naturally, use their own stated reason ("why") back
 to them rather than any instruction of your own.
 
+Also read their work, if this frame shows any. A frame shows work when it contains
+the student's own writing in progress — an editor or document with their notes in it,
+a page of handwriting, a problem sheet they are filling in. A lecture video, a slide
+deck, a search results page and a chat window are NOT their work: they are things they
+are reading. Transcribe only their own material, up to about 150 words of it, keeping
+their wording. Leave it empty when the frame shows nothing they wrote.
+
 Schema:
 {{"frame_kind": "screen"|"camera",
   "on_task": true|false,
   "seen": str,          // what is actually in the frame, concretely
   "reason": str,        // one line: why that is or is not on task for THIS contract
   "nudge": str,         // the line, or "" if on task
-  "confidence": "low"|"medium"|"high"}}"""
+  "confidence": "low"|"medium"|"high",
+  "work_text": str,     // their own visible writing, or "" if the frame shows none
+  "work_source": str}}  // where it is, e.g. "notes_tokenising.md in the editor"; "" if none"""
 
 
 ARTIFACT_DIFF = """Two snapshots of a student's working file, taken {minutes} minutes apart.
