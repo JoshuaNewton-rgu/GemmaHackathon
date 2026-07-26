@@ -12,7 +12,7 @@ const state = {
   stream: null,
   webcamStream: null,
   signals: { screen: true, camera: true, diff: true, idle: false },
-  tone: "warm",
+  tone: "calm",
   breakTimer: null,
   breakEndsAt: null,
   breakTotal: 0,
@@ -179,10 +179,80 @@ $("c-tone").addEventListener("click", (event) => {
   if (!button) return;
   state.tone = button.dataset.tone;
   paintTone();
+  void previewToneSpeech();
 });
 function paintTone() {
   document.querySelectorAll("#c-tone button").forEach((node) =>
     node.classList.toggle("on", node.dataset.tone === state.tone));
+}
+
+function previewToneSpeech() {
+  const profile = toneToSpeechProfile(state.tone);
+  const sample = profile.tone === "angry"
+    ? "Get back to work. Focus now."
+    : profile.tone === "blunt"
+      ? "Focus. Start with the next task."
+      : "Take it steady and begin with one small step.";
+  return playNudgeSpeech(sample);
+}
+
+function toneToSpeechProfile(tone = state.tone) {
+  const normalized = String(tone || "").toLowerCase();
+  if (normalized.includes("angry") || normalized.includes("firm") || normalized.includes("sharp")) {
+    return {
+      tone: "angry",
+      style: "energetic",
+      emotion: "angry",
+      voice: "en-gb",
+      pitch: 1.14,
+      rate: 1.06,
+    };
+  }
+  if (normalized.includes("blunt") || normalized.includes("dry")) {
+    return {
+      tone: "blunt",
+      style: "serious",
+      emotion: "neutral",
+      voice: "en-gb",
+      pitch: 1.0,
+      rate: 0.96,
+    };
+  }
+  return {
+    tone: "calm",
+    style: "calm",
+    emotion: "calm",
+    voice: "en-us",
+    pitch: 0.95,
+    rate: 0.94,
+  };
+}
+
+function selectBrowserVoice(profile) {
+  const voices = window.speechSynthesis?.getVoices?.() || [];
+  if (!voices.length) return null;
+
+  const list = voices.map((voice) => ({ voice, label: `${voice.name} ${voice.lang}`.toLowerCase() }));
+  const lower = (text) => text.toLowerCase();
+
+  if (profile.tone === "angry") {
+    const preferred = list.find(({ label }) =>
+      label.includes("scottish") || label.includes("glasgow") || label.includes("david") || label.includes("george") || label.includes("en-gb") || label.includes("en-uk")
+    );
+    return preferred?.voice || list.find(({ label }) => label.includes("en-gb") || label.includes("en-uk"))?.voice || voices[0];
+  }
+
+  if (profile.tone === "blunt") {
+    const preferred = list.find(({ label }) =>
+      label.includes("david") || label.includes("george") || label.includes("daniel") || label.includes("en-gb") || label.includes("en-uk")
+    );
+    return preferred?.voice || list.find(({ label }) => label.includes("en-gb") || label.includes("en-uk"))?.voice || voices[0];
+  }
+
+  const preferred = list.find(({ label }) =>
+    label.includes("hazel") || label.includes("zira") || label.includes("samantha") || label.includes("susan") || label.includes("female") || label.includes("en-us")
+  );
+  return preferred?.voice || list.find(({ label }) => label.includes("en-us"))?.voice || voices[0];
 }
 
 $("btn-compile").addEventListener("click", async (event) => {
@@ -225,9 +295,7 @@ function renderCompiled(contract) {
 
   // The compiler reads a tone out of the student's own words; reflect it in the
   // segmented control rather than overriding what they wrote.
-  const tone = (contract.tone || "").toLowerCase();
-  state.tone = tone.includes("blunt") || tone.includes("sharp") ? "blunt"
-    : tone.includes("plain") || tone.includes("dry") ? "plain" : "warm";
+  state.tone = toneToSpeechProfile(contract.tone || state.tone).tone;
   paintTone();
 
   // Signals the contract asked for win over the toggles' defaults.
@@ -643,11 +711,12 @@ $("btn-diff").addEventListener("click", async (event) => {
 /* ── nudge, bouncer, break (3b) ─────────────────────────────────────────── */
 
 async function playNudgeSpeech(text) {
+  const profile = toneToSpeechProfile(state.tone);
   try {
     const response = await fetch("/api/tss", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, voice: "en-us" }),
+      body: JSON.stringify({ text, voice: profile.voice, style: profile.style, emotion: profile.emotion, speed: 1.0 }),
     });
     if (!response.ok) throw new Error("speech unavailable");
     const blob = await response.blob();
@@ -656,11 +725,17 @@ async function playNudgeSpeech(text) {
     audio.play().catch(() => {
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
+      utterance.voice = selectBrowserVoice(profile);
+      utterance.pitch = profile.pitch;
+      utterance.rate = profile.rate;
       window.speechSynthesis.speak(utterance);
     });
   } catch {
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
+    utterance.voice = selectBrowserVoice(profile);
+    utterance.pitch = profile.pitch;
+    utterance.rate = profile.rate;
     window.speechSynthesis.speak(utterance);
   }
 }

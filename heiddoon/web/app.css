@@ -218,9 +218,11 @@ p.body.tight{font-size:14px}
 /* ── segmented button (tone), per 3a ───────────────────────────────────── */
 
 .segmented{display:flex;border:1px solid var(--outline);border-radius:var(--r-pill);overflow:hidden}
-.segmented button{flex:1;padding:8px 0;font:500 12.5px var(--sans);color:var(--on-surface-variant)}
+.segmented button{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:10px 6px;font:500 12.5px var(--sans);color:var(--on-surface-variant)}
 .segmented button+button{border-left:1px solid var(--outline)}
 .segmented button.on{background:var(--primary-container);color:var(--on-primary-container)}
+.segmented .tone-label{font-weight:600}
+.segmented .tone-sample{font-size:11px;opacity:.8}
 
 /* ── compiled contract readout, per 3a ─────────────────────────────────── */
 

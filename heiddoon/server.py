@@ -14,6 +14,9 @@ import io
 import json
 import os
 import queue
+import shutil
+import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -117,14 +120,14 @@ class AnswerRequest(BaseModel):
     answer: str
 
 
-<<<<<<< HEAD
 class TTSRequest(BaseModel):
     text: str
     voice: str | None = None
     style: str | None = None
     emotion: str | None = None
     speed: float | None = None
-=======
+
+
 class AutopilotRequest(BaseModel):
     enabled: bool = True
     cadence_s: int | None = None
@@ -132,7 +135,6 @@ class AutopilotRequest(BaseModel):
 
 class BreakStateRequest(BaseModel):
     on_break: bool
->>>>>>> 2f3113fa4c56e0718a6c75249044e1113671e2e4
 
 
 # ── status ──────────────────────────────────────────────────────────────────
@@ -164,6 +166,48 @@ def _server_capture_available() -> bool:
         return False
 
 
+def _should_use_piper_backend() -> bool:
+    if not settings.tts_enabled:
+        return False
+    backend = (getattr(settings, "tts_backend", "auto") or "auto").lower()
+    if backend == "hf":
+        return False
+    if backend == "piper":
+        return True
+    return bool(shutil.which("piper"))
+
+
+def _synthesize_tts_with_piper(
+    text: str,
+    voice: str | None = None,
+    style: str | None = None,
+    emotion: str | None = None,
+    speed: float | None = None,
+) -> bytes:
+    executable = getattr(settings, "tts_piper_executable", "piper") or "piper"
+    model = getattr(settings, "tts_piper_model", "") or os.getenv("HEIDDOON_TTS_PIPER_MODEL", "")
+    if not model:
+        raise RuntimeError("Piper model not configured")
+    if not shutil.which(executable):
+        raise RuntimeError("Piper executable not found")
+
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as handle:
+        output_path = Path(handle.name)
+
+    try:
+        subprocess.run(
+            [executable, "--model", model, "--output_file", str(output_path)],
+            input=text,
+            text=True,
+            capture_output=True,
+            timeout=60,
+            check=True,
+        )
+        return output_path.read_bytes()
+    finally:
+        output_path.unlink(missing_ok=True)
+
+
 def _build_tts_payload(
     text: str,
     voice: str | None = None,
@@ -172,12 +216,18 @@ def _build_tts_payload(
     speed: float | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {"inputs": text, "voice": voice or settings.tts_voice}
-    if style or settings.tts_style:
-        payload["style"] = style or settings.tts_style
-    if emotion or settings.tts_emotion:
-        payload["emotion"] = emotion or settings.tts_emotion
+    resolved_style = style or settings.tts_style or "neutral"
+    resolved_emotion = emotion or settings.tts_emotion or "neutral"
+    if resolved_style:
+        payload["style"] = resolved_style
+    if resolved_emotion:
+        payload["emotion"] = resolved_emotion
     if speed is not None or settings.tts_speed != 1.0:
         payload["speed"] = speed if speed is not None else settings.tts_speed
+    payload["instructions"] = (
+        "Speak in a natural, human-like, conversational way with clear pauses. "
+        f"Use a {resolved_style} tone and a {resolved_emotion} emotion."
+    )
     return payload
 
 
@@ -191,6 +241,16 @@ def _synthesize_tts(
     if not settings.tts_enabled:
         raise RuntimeError("TTS is disabled")
 
+    if _should_use_piper_backend():
+        try:
+            return _synthesize_tts_with_piper(text, voice, style, emotion, speed)
+        except Exception as exc:  # noqa: BLE001
+            last_error = exc
+        else:
+            last_error = None
+    else:
+        last_error = None
+
     payloads = [
         _build_tts_payload(text, voice, style, emotion, speed),
         {"inputs": text},
@@ -202,7 +262,9 @@ def _synthesize_tts(
     if token:
         headers["Authorization"] = f"Bearer {token}"
 
-    last_error: Exception | None = None
+    if last_error is not None:
+        payloads = [{"inputs": text}, {"inputs": text, "parameters": {"voice": voice or settings.tts_voice}}]
+
     for payload in payloads:
         try:
             response = requests.post(endpoint, headers=headers, json=payload, timeout=60)
