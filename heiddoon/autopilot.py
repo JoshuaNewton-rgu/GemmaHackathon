@@ -32,6 +32,10 @@ class AutopilotState:
     """What the UI needs to show about the loop, and what the loop needs to run."""
 
     running: bool = False
+    #: True while a verdict is actually in flight. A vision call takes ~16s and
+    #: cannot be made faster (thinking is mandatory on this model), so the UI needs
+    #: to show that something is happening or the wait reads as a hang.
+    busy: bool = False
     checks: int = 0
     skipped: int = 0
     last_check_at: float | None = None
@@ -42,6 +46,7 @@ class AutopilotState:
     def to_dict(self) -> dict[str, Any]:
         return {
             "running": self.running,
+            "busy": self.busy,
             "checks": self.checks,
             "skipped_unchanged": self.skipped,
             "last_check_at": self.last_check_at,
@@ -70,7 +75,10 @@ class Autopilot:
             state.last_error = "screen capture unavailable on the server: pip install mss"
             return state
 
-        cadence = cadence_s or self.settings.auto_cadence_s
+        # Clamped: a demo wants this as low as it will go, but below a couple of
+        # seconds the loop would spend its life capturing frames it has no time to
+        # judge. The ceiling stops a typo parking the watcher for an afternoon.
+        cadence = max(2, min(3600, cadence_s or self.settings.auto_cadence_s))
         state.running = True
         state.last_error = ""
         state._task = asyncio.create_task(self._loop(session, cadence, state))
@@ -125,7 +133,11 @@ class Autopilot:
                         # "unchanged" would bury the events that mean something.
                         state.skipped += 1
                     else:
-                        await asyncio.to_thread(session.judge_frame, frame, kind="screen")
+                        state.busy = True
+                        try:
+                            await asyncio.to_thread(session.judge_frame, frame, kind="screen")
+                        finally:
+                            state.busy = False
                         state.checks += 1
                     last_hash = current_hash
                     state.last_check_at = time.time()

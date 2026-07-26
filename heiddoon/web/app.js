@@ -20,6 +20,7 @@ const state = {
   autopilot: false,
   autoCadence: 60,
   pageCamStream: null,
+  manualBusy: false,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -71,7 +72,7 @@ function forgetSession() {
   state.startedAt = null;
   state.events = [];
   if (state.stream) { state.stream.close(); state.stream = null; }
-  if (state.webcamStream) { state.webcamStream.getTracks().forEach((t) => t.stop()); state.webcamStream = null; }
+  stopAllCameras();
   $("nav-watch").disabled = true;
   $("nav-receipt").disabled = true;
   $("feed").innerHTML = '<div class="feed-empty">Nothing yet.</div>';
@@ -87,10 +88,12 @@ function forgetSession() {
    rather than firing an identical request. */
 function withBusy(button, label) {
   const original = button ? button.textContent : null;
+  state.manualBusy = true;
   $("status-chip").classList.add("busy");
   $("status-text").textContent = label;
   if (button) { button.disabled = true; button.dataset.wasText = original; button.textContent = "Working…"; }
   return () => {
+    state.manualBusy = false;
     $("status-chip").classList.remove("busy");
     $("status-text").textContent = state.sessionId ? "watching" : "idle";
     if (button) { button.disabled = false; button.textContent = button.dataset.wasText || original; }
@@ -117,6 +120,7 @@ function show(name) {
   // Reflect the screen in the URL so a screen can be linked or bookmarked — and
   // so a demo can open straight onto the one it needs.
   if (window.location.hash.slice(1) !== name) window.history.replaceState(null, "", `#${name}`);
+  if (name !== "watch") stopAllCameras();
   if (name === "history") loadHistory();
   if (name === "privacy") loadPrivacy();
 }
@@ -139,7 +143,10 @@ async function loadStatus() {
     // Say which screen the button is about to read — the server's, or whichever
     // window the browser picker offers.
     state.serverCapture = !!status.server_capture;
-    state.autoCadence = status.auto_cadence_s || 60;
+    let saved = null;
+    try { saved = Number(localStorage.getItem("heiddoon.cadence")) || null; } catch { /* private mode */ }
+    state.autoCadence = saved || status.auto_cadence_s || 60;
+    paintPace();
     $("capture-hint").textContent = state.serverCapture
       ? "Grabs this machine's screen as it is right now, judges it, and drops it. No dialog, nothing stored."
       : "Asks which window or screen to share, grabs one frame, and stops. Nothing keeps watching.";
@@ -471,8 +478,29 @@ $("btn-snap").addEventListener("click", async (event) => {
     await judgeBlob(await grabStill(state.webcamStream), "camera", event.target);
   } catch (error) {
     snack(`Could not take that frame: ${error.message}`, true);
+  } finally {
+    // One glance, then the light goes out. A preview left running is a camera the
+    // student has to keep trusting, and the whole point is that it looks once.
+    stopWebcam();
   }
 });
+
+function stopWebcam() {
+  if (state.webcamStream) {
+    state.webcamStream.getTracks().forEach((track) => track.stop());
+    state.webcamStream = null;
+  }
+  $("webcam").srcObject = null;
+  $("webcam").classList.add("hidden");
+  $("btn-snap").classList.add("hidden");
+}
+
+/* Any camera, anywhere, off. Used when a photo is done with, when the session ends,
+   and when the student navigates away from the watch screen. */
+function stopAllCameras() {
+  stopWebcam();
+  stopPageCam();
+}
 
 /* ── autopilot: watching without being asked to ─────────────────────────── */
 
@@ -482,7 +510,7 @@ async function setAutopilot(enabled, { quiet = false } = {}) {
     const { autopilot } = await api(`/api/session/${state.sessionId}/autopilot`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ enabled }),
+      body: JSON.stringify({ enabled, cadence_s: state.autoCadence }),
     });
     state.autopilot = enabled && autopilot.running;
     paintAutopilot(autopilot);
@@ -507,17 +535,56 @@ function paintAutopilot(autopilot) {
 
 $("auto-toggle").addEventListener("click", () => setAutopilot(!state.autopilot));
 
-/* Poll the loop's counters occasionally. The verdicts themselves arrive over the
-   event stream — this is only the "is it alive" line. */
+/* Pace. A demo runs in two minutes, not two hours, so the cadence has to be
+   changeable on stage without editing a file and restarting. Kept in localStorage
+   so a reload mid-demo does not quietly drop back to the slow setting. */
+const PACE_NOTES = {
+  60: "Every 60 seconds. The everyday setting — cheap, and quick enough to catch drift.",
+  20: "Every 20 seconds, matching the local watcher.",
+  5: "As fast as it can manage. A vision call takes 13–15s, so checks run back to back "
+    + "rather than literally every 5s. For demos, not for studying.",
+};
+
+function paintPace() {
+  document.querySelectorAll("#pace button").forEach((node) =>
+    node.classList.toggle("on", Number(node.dataset.cadence) === state.autoCadence));
+  $("pace-note").textContent = PACE_NOTES[state.autoCadence] || "";
+}
+
+$("pace").addEventListener("click", async (event) => {
+  const button = event.target.closest("button[data-cadence]");
+  if (!button) return;
+  state.autoCadence = Number(button.dataset.cadence);
+  try { localStorage.setItem("heiddoon.cadence", String(state.autoCadence)); } catch { /* private mode */ }
+  paintPace();
+  if (state.sessionId && state.autopilot) {
+    // Restart the loop so the new pace takes effect now rather than after the
+    // current sleep, which at 60s would be a long wait in front of an audience.
+    await setAutopilot(false, { quiet: true });
+    await setAutopilot(true);
+  }
+});
+
+/* Poll the loop often enough to feel live. The verdicts themselves arrive over the
+   event stream; this drives the "is it alive, is it thinking" line.
+
+   Two seconds, not fifteen: a verdict takes about sixteen seconds and cannot be
+   hurried, so the only thing that makes the wait bearable is showing that it is
+   happening. It is a local request against our own process — the cost is nil. */
 setInterval(async () => {
   if (!state.sessionId || !state.autopilot) return;
   try {
     const { autopilot } = await api(`/api/session/${state.sessionId}/autopilot`);
     state.autopilot = autopilot.running;
     paintAutopilot(autopilot);
+    // Do not fight a manual action for the status chip — that has its own label.
+    if (!state.manualBusy) {
+      $("status-chip").classList.toggle("busy", !!autopilot.busy);
+      $("status-text").textContent = autopilot.busy ? "reading your screen" : "watching";
+    }
     if (autopilot.last_error) $("auto-desc").textContent = autopilot.last_error;
   } catch { /* a hiccup here is not worth a message */ }
-}, 15000);
+}, 2000);
 
 /* ── the page request ───────────────────────────────────────────────────── */
 
@@ -570,8 +637,14 @@ $("page-file").addEventListener("change", (event) => {
 $("btn-page-shoot").addEventListener("click", async (event) => {
   if (!state.pageCamStream) return;
   try {
-    await readPage(await grabStill(state.pageCamStream), event.target);
+    const still = await grabStill(state.pageCamStream);
+    // Close the camera before the model call, not after: the photo is already
+    // taken, and leaving a preview up for fifteen seconds of reading looks like
+    // it is still watching.
+    stopPageCam();
+    await readPage(still, event.target);
   } catch (error) {
+    stopPageCam();
     snack(`Could not take that photo: ${error.message}`, true);
   }
 });
@@ -773,8 +846,13 @@ $("btn-finish").addEventListener("click", async (event) => {
   try {
     const { receipt } = await api(`/api/session/${state.sessionId}/finish`, { method: "POST" });
     renderReceipt(receipt);
+    // The server stops the watch loop on finish; this is the browser's half —
+    // close the event stream and every camera before showing the receipt.
     if (state.stream) { state.stream.close(); state.stream = null; }
-    if (state.webcamStream) state.webcamStream.getTracks().forEach((track) => track.stop());
+    stopAllCameras();
+    state.autopilot = false;
+    $("auto-toggle").classList.remove("on");
+    hidePageAsk();
     show("receipt");
   } catch (error) {
     snack(`Could not finish: ${error.message}`, true);
