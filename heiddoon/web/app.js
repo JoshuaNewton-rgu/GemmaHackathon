@@ -50,6 +50,42 @@ function snack(message, isError = false) {
   setTimeout(() => node.remove(), isError ? 7000 : 3500);
 }
 
+/* ── theme ───────────────────────────────────────────────────────────────
+   The attribute is already on <html> — the inline script in index.html sets it
+   before first paint. This only flips it and remembers the choice, which is
+   kept locally alongside the pace and never sent anywhere. Until they press the
+   button there is nothing stored, so the app keeps following the OS. */
+
+const THEME_KEY = "heiddoon.theme";
+const isDark = () => document.documentElement.dataset.theme === "dark";
+
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  const button = $("btn-theme");
+  const dark = theme === "dark";
+  const label = dark ? "Switch to light" : "Switch to dark";
+  button.setAttribute("aria-pressed", String(dark));
+  button.setAttribute("aria-label", label);
+  button.title = label;
+  button.querySelector("use").setAttribute("href", dark ? "#i-sun" : "#i-moon");
+}
+
+$("btn-theme").addEventListener("click", () => {
+  const next = isDark() ? "light" : "dark";
+  applyTheme(next);
+  try { localStorage.setItem(THEME_KEY, next); } catch { /* private mode */ }
+});
+
+// Someone whose machine switches at sunset should switch with it — but only
+// while they have not made a choice of their own.
+if (window.matchMedia) {
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (event) => {
+    let chosen = null;
+    try { chosen = localStorage.getItem(THEME_KEY); } catch { /* private mode */ }
+    if (!chosen) applyTheme(event.matches ? "dark" : "light");
+  });
+}
+
 async function api(path, options = {}) {
   const response = await fetch(path, options);
   if (!response.ok) {
@@ -1473,5 +1509,6 @@ function renderExpertReview(review) {
 }
 
 loadStatus();
+applyTheme(isDark() ? "dark" : "light");
 paintTone();
 if (window.location.hash.length > 1) show(window.location.hash.slice(1));

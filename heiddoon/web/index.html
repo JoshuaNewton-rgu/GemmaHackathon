@@ -5,6 +5,21 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Heid Doon</title>
 <link rel="stylesheet" href="/app.css">
+<script>
+  /* Theme, before first paint — a stylesheet cannot read localStorage, and
+     applying this from app.js at the end of the body would show one theme and
+     then swap to the other. Their stored choice wins; with no choice on record
+     the OS setting decides. Inline, like everything else here: the app makes no
+     external requests. */
+  (function () {
+    var saved = null;
+    try { saved = localStorage.getItem("heiddoon.theme"); } catch (e) { /* private mode */ }
+    var dark = saved
+      ? saved === "dark"
+      : window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+    document.documentElement.dataset.theme = dark ? "dark" : "light";
+  })();
+</script>
 </head>
 <body>
 
@@ -20,6 +35,7 @@
   <symbol id="i-camera" viewBox="0 0 24 24"><path d="M3 8.5A1.5 1.5 0 014.5 7h2.2l1.2-2h6.2l1.2 2h4.2A1.5 1.5 0 0121 8.5v9A1.5 1.5 0 0119.5 19h-15A1.5 1.5 0 013 17.5v-9z"/><circle cx="12" cy="13" r="3.2"/></symbol>
   <symbol id="i-doc" viewBox="0 0 24 24"><path d="M6 2.5h8l4.5 4.5v14.5H6z"/><path d="M14 2.5V7h4.5M9 12h6M9 16h6"/></symbol>
   <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 019.5 4a8.5 8.5 0 1010.5 10.5z"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.4M12 19.1v2.4M4.2 4.2l1.7 1.7M18.1 18.1l1.7 1.7M2.5 12h2.4M19.1 12h2.4M4.2 19.8l1.7-1.7M18.1 5.9l1.7-1.7"/></symbol>
   <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3zM18.5 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2z"/></symbol>
   <symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.6 2.6L16 9.5"/></symbol>
   <symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5M12 16h.01"/></symbol>
@@ -61,6 +77,9 @@
     <h1 id="bar-title">New session</h1>
     <span class="spacer"></span>
     <span class="bar-note" id="bar-note"></span>
+    <button class="icon-btn" id="btn-theme" type="button" aria-pressed="false" aria-label="Switch to dark">
+      <svg class="ic"><use href="#i-moon"/></svg>
+    </button>
     <span class="model-badge" id="model-badge">checking…</span>
   </header>
 
