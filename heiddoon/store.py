@@ -24,6 +24,10 @@ from typing import Any, Iterator
 from .config import settings
 from .schemas import Contract, Event, LearnerModel, Receipt
 
+#: Bumped when SCHEMA changes. Stored in the file's `user_version` so a connection
+#: can tell an initialised database from an empty one.
+SCHEMA_VERSION = 1
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS sessions (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -64,12 +68,25 @@ CREATE TABLE IF NOT EXISTS learner (
 """
 
 
+class SessionGone(RuntimeError):
+    """The session being written to no longer exists.
+
+    Raised instead of leaking sqlite3.IntegrityError, which is what surfaced when
+    the database was deleted mid-session: the schema is recreated on the next
+    connection, but the session row is not, so every write failed the foreign key
+    and returned a 500. The caller can recover from this; it cannot recover from a
+    traceback.
+    """
+
+
 class Store:
     def __init__(self, path: Path | str | None = None) -> None:
         self.path = Path(path or settings.db_path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        with self._connect() as connection:
-            connection.executescript(SCHEMA)
+        # Opening a connection is enough — `_connect` creates the schema when the
+        # file does not already have it, and does so for every later connection too.
+        with self._connect():
+            pass
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
@@ -77,6 +94,16 @@ class Store:
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA foreign_keys = ON")
         try:
+            # Re-create the schema if this file does not have it. Creating tables
+            # once in __init__ is not enough: sqlite3.connect() silently creates an
+            # empty file, so if the database is deleted or moved while the app is
+            # running — which happens, whether by tidying or by a sync client — the
+            # next connection succeeds against an empty database and every write
+            # then fails with "no such table: events" from deep inside a request.
+            # `user_version` is a cheap, standard marker to detect that.
+            if connection.execute("PRAGMA user_version").fetchone()[0] < SCHEMA_VERSION:
+                connection.executescript(SCHEMA)
+                connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             yield connection
             connection.commit()
         finally:
@@ -143,19 +170,23 @@ class Store:
     # ── events ──────────────────────────────────────────────────────────────
 
     def add_event(self, session_id: int, event: Event) -> int:
-        with self._connect() as connection:
-            cursor = connection.execute(
-                "INSERT INTO events (session_id, at, kind, on_task, seen, detail_json) VALUES (?, ?, ?, ?, ?, ?)",
-                (
-                    session_id,
-                    event.at,
-                    event.kind,
-                    None if event.on_task is None else int(event.on_task),
-                    event.seen,
-                    json.dumps(event.detail),
-                ),
-            )
-            return int(cursor.lastrowid)
+        try:
+            with self._connect() as connection:
+                cursor = connection.execute(
+                    "INSERT INTO events (session_id, at, kind, on_task, seen, detail_json) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    (
+                        session_id,
+                        event.at,
+                        event.kind,
+                        None if event.on_task is None else int(event.on_task),
+                        event.seen,
+                        json.dumps(event.detail),
+                    ),
+                )
+                return int(cursor.lastrowid)
+        except sqlite3.IntegrityError as exc:
+            raise SessionGone(f"session {session_id} no longer exists") from exc
 
     def events(self, session_id: int) -> list[Event]:
         with self._connect() as connection:
@@ -182,11 +213,14 @@ class Store:
         latest = self.latest_snapshot(session_id, path)
         if latest and latest["sha256"] == digest:
             return digest
-        with self._connect() as connection:
-            connection.execute(
-                "INSERT INTO snapshots (session_id, path, at, sha256, content) VALUES (?, ?, ?, ?, ?)",
-                (session_id, path, time.time(), digest, content),
-            )
+        try:
+            with self._connect() as connection:
+                connection.execute(
+                    "INSERT INTO snapshots (session_id, path, at, sha256, content) VALUES (?, ?, ?, ?, ?)",
+                    (session_id, path, time.time(), digest, content),
+                )
+        except sqlite3.IntegrityError as exc:
+            raise SessionGone(f"session {session_id} no longer exists") from exc
         return digest
 
     def latest_snapshot(self, session_id: int, path: str) -> dict[str, Any] | None:

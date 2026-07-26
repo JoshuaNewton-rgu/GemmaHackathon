@@ -402,6 +402,48 @@ class TestExportAndDelete:
         recent = session.store.recent_verdicts(limit=3)
         assert [entry["seen"] for entry in recent] == ["second", "first"]  # diff excluded
 
+    def test_store_survives_its_database_being_deleted_underneath_it(self, tmp_path):
+        """Reproduces a live failure: the db file was removed while the app ran.
+
+        sqlite3.connect() silently creates an empty file, so the next connection
+        succeeded against a database with no tables and every write failed with
+        "no such table: events" from deep inside a request handler. Creating the
+        schema once in __init__ is not enough.
+        """
+        store = Store(tmp_path / "fragile.db")
+        session_id = store.start_session(CONTRACT)
+        store.add_event(session_id, Event(kind="screen", on_task=True, seen="before"))
+
+        (tmp_path / "fragile.db").unlink()  # the tidy-up that broke it
+
+        recovered = store.start_session(CONTRACT)
+        store.add_event(recovered, Event(kind="screen", on_task=True, seen="after"))
+        assert [event.seen for event in store.events(recovered)] == ["after"]
+
+    def test_writing_to_a_vanished_session_raises_a_recoverable_error(self, tmp_path):
+        """Not sqlite3.IntegrityError — the caller needs something it can handle.
+
+        After the file is deleted the schema comes back but the session row does
+        not, so the insert fails the foreign key. That surfaced as a 500.
+        """
+        from heiddoon.store import SessionGone
+
+        store = Store(tmp_path / "gone.db")
+        session_id = store.start_session(CONTRACT)
+        (tmp_path / "gone.db").unlink()
+
+        with pytest.raises(SessionGone):
+            store.add_event(session_id, Event(kind="screen", on_task=True, seen="orphan"))
+        with pytest.raises(SessionGone):
+            store.add_snapshot(session_id, "notes.md", "orphan")
+
+    def test_a_second_store_on_the_same_file_shares_the_schema(self, tmp_path):
+        first = Store(tmp_path / "shared.db")
+        session_id = first.start_session(CONTRACT)
+        second = Store(tmp_path / "shared.db")
+        second.add_event(session_id, Event(kind="screen", on_task=True, seen="from the other store"))
+        assert len(first.events(session_id)) == 1
+
     def test_counts_reflect_what_is_on_disk(self, session):
         session._record(Event(kind="screen", on_task=True, seen="a"))
         session._record(Event(kind="screen", on_task=True, seen="b"))

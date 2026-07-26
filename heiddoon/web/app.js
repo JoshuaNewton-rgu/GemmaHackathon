@@ -47,13 +47,32 @@ async function api(path, options = {}) {
   const response = await fetch(path, options);
   if (!response.ok) {
     let detail = `${response.status} ${response.statusText}`;
+    let body = {};
     try {
-      const body = await response.json();
+      body = await response.json();
       if (body.detail) detail = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail);
     } catch { /* non-JSON error body */ }
+    // The session went away underneath us — reset rather than leaving the UI
+    // pointing at an id the server will keep rejecting.
+    if (response.status === 409 && body.session_gone) forgetSession();
     throw new Error(detail);
   }
   return response.json();
+}
+
+/* Drop every trace of the current session from the UI. Used when the session ends,
+   when its data is deleted, and when the server tells us it has vanished. */
+function forgetSession() {
+  state.sessionId = null;
+  state.startedAt = null;
+  state.events = [];
+  if (state.stream) { state.stream.close(); state.stream = null; }
+  if (state.webcamStream) { state.webcamStream.getTracks().forEach((t) => t.stop()); state.webcamStream = null; }
+  $("nav-watch").disabled = true;
+  $("nav-receipt").disabled = true;
+  $("feed").innerHTML = '<div class="feed-empty">Nothing yet.</div>';
+  $("verdict-count").textContent = "";
+  $("status-text").textContent = "idle";
 }
 
 /* Long model calls are the normal case here, not the exception — a vision call
@@ -753,12 +772,7 @@ $("btn-delete").addEventListener("click", async (event) => {
   const done = withBusy(event.target, "deleting");
   try {
     const { deleted } = await api("/api/data/delete", { method: "POST" });
-    state.sessionId = null;
-    state.events = [];
-    if (state.stream) { state.stream.close(); state.stream = null; }
-    $("nav-watch").disabled = true;
-    $("nav-receipt").disabled = true;
-    $("feed").innerHTML = '<div class="feed-empty">Nothing yet.</div>';
+    forgetSession();
     snack(`Deleted ${deleted.sessions} sessions and ${deleted.events} verdicts. Gone for good.`);
     loadPrivacy();
   } catch (error) {

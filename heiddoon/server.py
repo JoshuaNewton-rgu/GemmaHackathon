@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Response, UploadFile
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from . import prompts
@@ -26,7 +26,7 @@ from .core.contract import compile_contract
 from .core.session import Session
 from .providers import Provider, ProviderError, get_provider
 from .schemas import Contract, Event
-from .store import Store
+from .store import SessionGone, Store
 
 WEB_DIR = Path(__file__).parent / "web"
 
@@ -35,6 +35,27 @@ app = FastAPI(title="Heid Doon", version="0.1.0")
 _store = Store(settings.db_path)
 _sessions: dict[int, Session] = {}
 _streams: dict[int, list[queue.SimpleQueue]] = {}
+
+
+@app.exception_handler(SessionGone)
+async def _session_gone(request, exc: SessionGone) -> JSONResponse:
+    """A vanished session is the client's problem to recover from, not a crash.
+
+    Drops the stale in-memory session so a retry cannot hit the same wall, and
+    answers 409 with something the UI can act on.
+    """
+    for session_id in list(_sessions):
+        if not _store.get_session(session_id):
+            _sessions.pop(session_id, None)
+            _streams.pop(session_id, None)
+    return JSONResponse(
+        status_code=409,
+        content={
+            "detail": "That session no longer exists — the database may have been deleted or moved. "
+            "Start a new session; nothing else is affected.",
+            "session_gone": True,
+        },
+    )
 
 
 def _provider() -> Provider:

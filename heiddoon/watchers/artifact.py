@@ -65,9 +65,15 @@ class ArtifactWatcher:
 
             if state.reported:
                 continue
-            quiet_for = now - state.mtime
+            # Clamped at zero: a filesystem's mtime resolution does not match
+            # time.time()'s, so a file written microseconds ago can carry a
+            # timestamp fractionally in the future and produce a negative age.
+            # Unclamped that reads as "still being written" and the change is
+            # skipped — which showed up as an intermittently failing test rather
+            # than an obvious bug. A future mtime means "just changed".
+            quiet_for = max(0.0, now - state.mtime)
             if quiet_for < self.settle_s:
-                continue  # still being written (or the clock disagrees with us)
+                continue  # still being written
             if now - self._last_judged.get(key, 0.0) < self.min_interval_s:
                 continue  # judged recently; let some work accumulate
 
