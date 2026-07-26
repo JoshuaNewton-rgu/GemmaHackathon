@@ -22,6 +22,7 @@ from ..providers import Provider
 from ..schemas import Contract, Event
 from . import perceive as perceive_mod
 from .perceive import Perception
+from .verdict import _fallback_nudge
 
 #: How true a rule has to be before it is allowed to interrupt someone.
 #:
@@ -125,8 +126,15 @@ def decide(
         repairs=list(meta.repairs),
     )
 
-    if act and write_line:
-        outcome.nudge_line = write_nudge(provider, contract, perception.seen, firmness)
+    if act:
+        # Not writing the line is a choice about who phrases it, never a choice to
+        # interrupt someone with nothing to read. The model-free line quotes their own
+        # stated reason back at them, which is what the prompt is asked to do anyway.
+        outcome.nudge_line = (
+            write_nudge(provider, contract, perception.seen, firmness)
+            if write_line
+            else _fallback_nudge(contract)
+        )
 
     outcome.latency_s = time.time() - began
     return outcome
