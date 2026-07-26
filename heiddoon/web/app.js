@@ -110,6 +110,7 @@ const TITLES = {
   contract: "New session",
   watch: "Watching",
   receipt: "Receipt",
+  reasoning: "Why it did that",
   history: "History",
   privacy: "Privacy",
 };

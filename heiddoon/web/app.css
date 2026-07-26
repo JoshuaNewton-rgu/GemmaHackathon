@@ -391,3 +391,34 @@ video{width:100%;border-radius:var(--r-field);background:#000;display:block;marg
 .session-row:first-child{border-top:none}
 .score-pip{width:44px;height:44px;border-radius:var(--r-pill);background:var(--secondary-container);color:var(--on-secondary-container);display:grid;place-items:center;font:500 14px var(--sans);flex:none;font-variant-numeric:tabular-nums}
 .score-pip.open{background:var(--surface-variant);color:var(--on-surface-dim)}
+
+/* ── the reasoning panel: bars for degrees, cards for rules ───────────────── */
+
+.percept{display:grid;grid-template-columns:132px 1fr 46px;gap:10px;align-items:center;padding:5px 0}
+.percept .nm{font:400 12.5px var(--mono);color:var(--on-surface-variant)}
+.percept .track{height:10px;border-radius:var(--r-pill);background:var(--surface-variant);overflow:hidden;position:relative}
+.percept .fill{display:block;height:100%;border-radius:var(--r-pill);background:var(--primary);transition:width .3s}
+.percept .fill.measured{background:var(--tertiary)}
+.percept .val{font:500 12px var(--mono);color:var(--on-surface);text-align:right;font-variant-numeric:tabular-nums}
+.percept .words{grid-column:2 / -1;display:flex;gap:6px;margin-top:-2px}
+.percept .word{font:400 10.5px var(--mono);color:var(--on-surface-dim)}
+.percept .word b{color:var(--primary);font-weight:600}
+.legend-note{font:400 11.5px var(--sans);color:var(--on-surface-dim);margin-top:10px}
+.legend-note .sw{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px}
+
+.rulecard{border:1px solid var(--outline-variant);border-radius:var(--r-field);padding:12px 14px;margin-top:8px}
+.rulecard.top{border-color:var(--primary);background:rgba(29,106,80,.05)}
+.rulecard .head{display:flex;align-items:baseline;gap:10px}
+.rulecard .txt{font:400 13px/1.5 var(--mono);color:var(--on-surface);flex:1;overflow-wrap:anywhere}
+.rulecard .str{font:600 12px var(--mono);color:var(--primary);white-space:nowrap}
+.rulecard .clauses{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.rulecard .cl{font:400 11px var(--mono);background:var(--surface-variant);border-radius:6px;padding:3px 7px;color:var(--on-surface-variant)}
+.rulecard .why{font:400 12px/1.5 var(--sans);color:var(--on-surface-dim);margin-top:8px}
+.rulecard .ctl{display:flex;align-items:center;gap:8px;margin-top:10px}
+.rulecard input[type=range]{flex:1;accent-color:var(--primary)}
+.rulecard .wt{font:500 12px var(--mono);width:34px;text-align:right}
+.badge.tuned{background:var(--tertiary-container);color:var(--on-tertiary-container)}
+.badge.locked{background:var(--surface-variant);color:var(--on-surface-dim)}
+.verdict-line{font:400 15px/1.5 var(--sans);color:var(--on-surface);padding:12px 14px;border-left:3px solid var(--primary);background:var(--surface-container);border-radius:0 var(--r-field) var(--r-field) 0}
+.profile{font:400 15px/1.6 var(--sans);color:var(--on-surface);text-wrap:pretty}
+.disclaimer{font:400 11.5px/1.5 var(--sans);color:var(--on-surface-dim);border-top:1px solid var(--divider);margin-top:14px;padding-top:10px}

@@ -36,7 +36,14 @@ def store(tmp_path):
 
 @pytest.fixture
 def session(store, tmp_path):
-    settings = Settings(db_path=tmp_path / "test.db")
+    """A session on the binary verdict path.
+
+    Explicit rather than relying on the default: these tests were written against
+    `core.verdict.judge_frame` and several patch it directly, so they must select that
+    path by name. The interpretable path has its own integration coverage in
+    tests/test_fuzzy.py.
+    """
+    settings = Settings(db_path=tmp_path / "test.db", interpretable=False)
     return Session(MockProvider(), CONTRACT, store=store, settings=settings)
 
 
@@ -566,7 +573,9 @@ class TestShouldAskForNotes:
 
     @pytest.fixture
     def paper_session(self, store, tmp_path):
-        settings = Settings(db_path=tmp_path / "test.db", notes_prompt_every_min=25)
+        settings = Settings(
+            db_path=tmp_path / "test.db", notes_prompt_every_min=25, interpretable=False
+        )
         return Session(MockProvider(), PAPER_CONTRACT, store=store, settings=settings)
 
     def test_not_asked_before_the_interval_has_passed(self, paper_session):
@@ -865,7 +874,9 @@ class TestAutopilot:
         monkeypatch.setattr(screen_mod, "capture", lambda *a, **k: still.copy())
 
         provider = MockProvider()
-        settings = Settings(db_path=tmp_path / "test.db", notes_prompt_every_min=0)
+        settings = Settings(
+            db_path=tmp_path / "test.db", notes_prompt_every_min=0, interpretable=False
+        )
         session = Session(provider, CONTRACT, store=store, settings=settings)
 
         async def run() -> None:
@@ -897,7 +908,9 @@ class TestAutopilot:
         monkeypatch.setattr(screen_mod, "available", lambda: True)
         monkeypatch.setattr(screen_mod, "capture", lambda *a, **k: still.copy())
 
-        settings = Settings(db_path=tmp_path / "test.db", notes_prompt_every_min=0)
+        settings = Settings(
+            db_path=tmp_path / "test.db", notes_prompt_every_min=0, interpretable=False
+        )
         session = Session(MockProvider(), CONTRACT, store=store, settings=settings)
 
         async def run() -> None:

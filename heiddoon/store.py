@@ -26,7 +26,7 @@ from .schemas import Contract, Event, LearnerModel, Receipt
 
 #: Bumped when SCHEMA changes. Stored in the file's `user_version` so a connection
 #: can tell an initialised database from an empty one.
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2  # 2 adds rule_weights
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS sessions (
@@ -59,6 +59,17 @@ CREATE TABLE IF NOT EXISTS snapshots (
     content    TEXT    NOT NULL
 );
 CREATE INDEX IF NOT EXISTS snapshots_by_path ON snapshots(session_id, path, at);
+
+-- Tuned rule weights, per profile. Only weights and their history: the rules
+-- themselves are code, so a stored file can never introduce a rule nobody reviewed.
+CREATE TABLE IF NOT EXISTS rule_weights (
+    profile    TEXT NOT NULL,
+    rule_id    TEXT NOT NULL,
+    weight     REAL NOT NULL,
+    history    TEXT NOT NULL DEFAULT '[]',
+    updated_at REAL NOT NULL,
+    PRIMARY KEY (profile, rule_id)
+);
 
 CREATE TABLE IF NOT EXISTS learner (
     profile    TEXT PRIMARY KEY,
@@ -259,6 +270,35 @@ class Store:
                 (profile, json.dumps(learner.to_dict()), time.time()),
             )
 
+    # ── tuned rule weights ──────────────────────────────────────────────────
+
+    def get_rule_weights(self, *, profile: str = "default") -> dict[str, dict[str, Any]]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT rule_id, weight, history FROM rule_weights WHERE profile = ?", (profile,)
+            ).fetchall()
+        return {
+            row["rule_id"]: {"weight": row["weight"], "history": json.loads(row["history"])}
+            for row in rows
+        }
+
+    def save_rule_weight(
+        self, rule_id: str, weight: float, history: list[str], *, profile: str = "default"
+    ) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                "INSERT INTO rule_weights (profile, rule_id, weight, history, updated_at) "
+                "VALUES (?, ?, ?, ?, ?) ON CONFLICT(profile, rule_id) DO UPDATE SET "
+                "weight = excluded.weight, history = excluded.history, updated_at = excluded.updated_at",
+                (profile, rule_id, float(weight), json.dumps(history), time.time()),
+            )
+
+    def reset_rule_weights(self, *, profile: str = "default") -> int:
+        """Back to the shipped defaults. A tuned system must be un-tunable too."""
+        with self._connect() as connection:
+            cursor = connection.execute("DELETE FROM rule_weights WHERE profile = ?", (profile,))
+            return cursor.rowcount
+
     # ── the student's data is the student's ─────────────────────────────────
     # "Monitoring you opted into" only means anything if you can also see all of
     # it and take it away. Both of these are part of the product, not admin tools.
@@ -411,6 +451,7 @@ class Store:
             )
             connection.execute("DELETE FROM sessions WHERE profile = ?", (profile,))
             connection.execute("DELETE FROM learner WHERE profile = ?", (profile,))
+            connection.execute("DELETE FROM rule_weights WHERE profile = ?", (profile,))
 
         # VACUUM cannot run inside a transaction, and sqlite3 opens one implicitly
         # for the DELETEs above — so it gets its own autocommit connection. Worth

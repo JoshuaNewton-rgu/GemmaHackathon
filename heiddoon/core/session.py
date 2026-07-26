@@ -18,8 +18,11 @@ from ..config import Settings, settings as default_settings
 from ..providers import Provider
 from ..schemas import Contract, Diff, Event, Grade, PageRead, Quiz, Receipt, Verdict
 from ..store import Store
+from ..fuzzy import Rule, default_rules
 from . import (
     bouncer,
+    decide as decide_mod,
+    expert as expert_mod,
     diff as diff_mod,
     notes as notes_mod,
     receipt as receipt_mod,
@@ -63,7 +66,106 @@ class Session:
         self._last_artifact_check: dict[str, float] = {}
         self._last_notes_check: float | None = None
         self._last_progress_check: float | None = None
+        self._last_break_at: float | None = None
+        self.rules: list[Rule] = self._load_rules()
+        #: The most recent decision trace, for the xAI panel.
+        self.last_trace: dict[str, Any] | None = None
         self._on_break = False
+
+    # ── the interpretable rule base ─────────────────────────────────────────
+
+    def _load_rules(self) -> list[Rule]:
+        """Shipped rules, with any weights tuned for this student applied on top.
+
+        The rules themselves always come from code. Only weights are stored, so a
+        database can never introduce a rule that nobody reviewed — which is the
+        property that makes the rule base auditable at all.
+        """
+        rules = default_rules()
+        tuned = self.store.get_rule_weights(profile=self.profile)
+        for rule in rules:
+            stored = tuned.get(rule.id)
+            if stored:
+                rule.weight = float(stored["weight"])
+                rule.history = list(stored.get("history", []))
+                rule.tuned = True
+        return rules
+
+    def save_rules(self) -> None:
+        for rule in self.rules:
+            if rule.tuned:
+                self.store.save_rule_weight(
+                    rule.id, rule.weight, rule.history, profile=self.profile
+                )
+
+    def judge_frame_interpretably(self, image: Any, *, kind: str = "screen") -> Any:
+        """The decision path: perceive, measure, infer, and speak only if told to.
+
+        Replaces a binary verdict with a traced decision. What gets logged is the
+        percept degrees and the rules that fired, so the receipt and the xAI panel are
+        reading the same arithmetic that produced the intervention rather than a
+        story told about it afterwards.
+        """
+        outcome = decide_mod.decide(
+            self.provider,
+            self.contract,
+            image,
+            rules=self.rules,
+            events=self.events,
+            started_at=self.started_at,
+            last_break_at=self._last_break_at,
+            kind=kind,
+        )
+        self.last_trace = outcome.to_dict()
+
+        self._record(
+            Event(
+                kind=kind,
+                on_task=outcome.on_task,
+                seen=outcome.perception.seen,
+                detail={
+                    "reason": outcome.perception.reason,
+                    "nudge": outcome.nudge_line,
+                    "firmness": outcome.firmness if outcome.act else "silent",
+                    "acted": outcome.act,
+                    "percepts": outcome.perception.to_dict(),
+                    "decisions": outcome.decision.output_words,
+                    # The rules that caused this, by id and strength. Small enough to
+                    # keep on every event, which is what makes the whole session
+                    # auditable rather than only the latest frame.
+                    "fired": [
+                        {"id": item.rule.id, "strength": round(item.strength, 3)}
+                        for item in outcome.decision.top_rules(limit=4)
+                    ],
+                    "why": outcome.decision.why("nudge"),
+                    "latency_s": round(outcome.latency_s, 2),
+                    "read_work": bool(outcome.perception.work_text.strip()),
+                    "work_source": outcome.perception.work_source,
+                },
+            )
+        )
+
+        # The work-reading and progress path is unchanged: the fuzzy layer decides
+        # what to do about the work, it does not change how the work is measured.
+        if outcome.perception.work_text.strip():
+            from ..schemas import Verdict
+
+            self._keep_work_excerpt(
+                Verdict(
+                    on_task=outcome.on_task,
+                    seen=outcome.perception.seen,
+                    work_text=outcome.perception.work_text,
+                    work_source=outcome.perception.work_source,
+                )
+            )
+        return outcome
+
+    def expert_review(self) -> Any:
+        """Have the expert agent tune this student's weights, and say why."""
+        result, _ = expert_mod.review(self.provider, self.rules, self.events)
+        expert_mod.apply_changes(self.rules, result)
+        self.save_rules()
+        return result
 
     # ── plumbing ────────────────────────────────────────────────────────────
 
@@ -93,8 +195,20 @@ class Session:
 
     # ── watch + intervene ───────────────────────────────────────────────────
 
-    def judge_frame(self, image: Any, *, kind: str = "screen") -> Verdict:
-        """Judge a frame and log the verdict. The frame itself is never stored."""
+    def judge_frame(self, image: Any, *, kind: str = "screen") -> Any:
+        """Judge a frame. Interpretable path by default; binary if switched off.
+
+        One entry point so every caller — the autopilot, the web app, the CLI watcher —
+        moves together. The binary path is kept because the labelled eval measures
+        on-task accuracy against it, and changing the measurement at the same time as
+        the mechanism would make the two incomparable.
+        """
+        if self.settings.interpretable:
+            return self.judge_frame_interpretably(image, kind=kind)
+        return self.judge_frame_binary(image, kind=kind)
+
+    def judge_frame_binary(self, image: Any, *, kind: str = "screen") -> Verdict:
+        """The original single-verdict path. Frame is never stored."""
         result, _ = verdict_mod.judge_frame(self.provider, self.contract, image, expect_kind=kind)
         self._record(
             Event(
@@ -356,8 +470,14 @@ class Session:
         return True
 
     def note_break(self, on_break: bool) -> None:
-        """Breaks suspend the ask — an earned break should be undisturbed."""
+        """Breaks suspend the ask — an earned break should be undisturbed.
+
+        Ending one also resets the fatigue clock, which is what stops the rule base
+        urging a second break straight after the first.
+        """
         self._on_break = on_break
+        if not on_break:
+            self._last_break_at = time.time()
 
     def judge_text_delta(self, before: str, after: str, *, minutes: int = 20) -> Diff:
         """Judge a delta supplied directly — how the web UI's diff tab works."""

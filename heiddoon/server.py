@@ -30,6 +30,7 @@ from .config import settings
 from .core.contract import compile_contract
 from .autopilot import Autopilot
 from .core import notes as notes_mod
+from .fuzzy import DECISIONS, PERCEPTS, validate
 from .core.session import Session
 from .providers import Provider, ProviderError, get_provider
 from .schemas import Contract, Event
@@ -137,6 +138,11 @@ class BreakStateRequest(BaseModel):
     on_break: bool
 
 
+class WeightRequest(BaseModel):
+    rule_id: str
+    weight: float
+
+
 # ── status ──────────────────────────────────────────────────────────────────
 
 
@@ -154,6 +160,33 @@ def _privacy_line(reachable: bool, is_local: bool, is_mock: bool) -> str:
     if is_local:
         return "Frames judged on this machine by a local model. Never stored, never sent."
     return "Frames are sent to a hosted API to be judged, then discarded. Never stored."
+
+
+def _frame_payload(result: Any) -> dict[str, Any]:
+    """One response shape for both decision paths.
+
+    The interpretable path returns an Outcome carrying a rule trace; the binary path
+    returns a Verdict. The UI should not have to care which is configured, so the
+    difference is flattened here — with `trace` present only when there is one.
+    """
+    if hasattr(result, "decision"):  # Outcome, from the fuzzy path
+        return {
+            "verdict": {
+                "on_task": result.on_task,
+                "seen": result.perception.seen,
+                "reason": result.perception.reason,
+                "nudge": result.nudge_line,
+                "confidence": result.perception.confidence,
+                "work_text": result.perception.work_text,
+                "work_source": result.perception.work_source,
+            },
+            "interpretable": True,
+            "act": result.act,
+            "firmness": result.firmness,
+            "trace": result.decision.to_dict(),
+            "repairs": result.repairs,
+        }
+    return {"verdict": result.to_dict(), "interpretable": False, "repairs": result._repairs}
 
 
 def _server_capture_available() -> bool:
@@ -401,8 +434,8 @@ async def api_frame(session_id: int, file: UploadFile, kind: str = "screen") -> 
     finally:
         await file.close()
 
-    verdict = await asyncio.to_thread(session.judge_frame, frame, kind=kind)
-    return {"verdict": verdict.to_dict(), "repairs": verdict._repairs}
+    result = await asyncio.to_thread(session.judge_frame, frame, kind=kind)
+    return _frame_payload(result)
 
 
 @app.post("/api/session/{session_id}/capture-screen")
@@ -431,8 +464,8 @@ async def api_capture_screen(session_id: int, monitor: int = 1) -> dict[str, Any
     except Exception as exc:  # noqa: BLE001 - no display, wrong monitor index, etc.
         raise HTTPException(status_code=503, detail=f"could not capture the screen: {exc}") from exc
 
-    verdict = await asyncio.to_thread(session.judge_frame, frame, kind="screen")
-    return {"verdict": verdict.to_dict(), "repairs": verdict._repairs}
+    result = await asyncio.to_thread(session.judge_frame, frame, kind="screen")
+    return _frame_payload(result)
 
 
 @app.post("/api/session/{session_id}/autopilot")
@@ -663,6 +696,97 @@ def api_delete_everything(profile: str = "default") -> dict[str, Any]:
         _sessions.pop(session_id, None)
         _streams.pop(session_id, None)
     return {"deleted": removed}
+
+
+@app.get("/api/rules")
+def api_rules(session_id: int | None = None, profile: str = "default") -> dict[str, Any]:
+    """The whole rule base, as readable sentences with their weights.
+
+    Exposed in full rather than summarised: a system that claims to be interpretable
+    has to be willing to show all of its policy, including the rules that did not fire.
+    """
+    if session_id is not None:
+        rules = _session(session_id).rules
+    else:
+        from .core.session import Session as _S  # local import keeps startup light
+
+        rules = _S._load_rules(  # type: ignore[arg-type]
+            type("_Stub", (), {"store": _store, "profile": profile})()
+        )
+    return {
+        "rules": [rule.to_dict() for rule in rules],
+        "percepts": [
+            {
+                "name": variable.name,
+                "description": variable.description,
+                "words": [fuzzy_set.name for fuzzy_set in variable.sets],
+                "low_label": variable.low_label,
+                "high_label": variable.high_label,
+            }
+            for variable in PERCEPTS.values()
+        ],
+        "decisions": [
+            {
+                "name": variable.name,
+                "description": variable.description,
+                "words": [fuzzy_set.name for fuzzy_set in variable.sets],
+            }
+            for variable in DECISIONS.values()
+        ],
+        "problems": validate(rules),
+        "tuned": sum(1 for rule in rules if rule.tuned),
+    }
+
+
+@app.post("/api/session/{session_id}/rules/weight")
+def api_set_weight(session_id: int, request: WeightRequest) -> dict[str, Any]:
+    """Let the student retune a rule themselves. Autonomy applies to the rules too."""
+    from .core.expert import MAX_WEIGHT, MIN_WEIGHT, PROTECTED
+
+    session = _session(session_id)
+    if not MIN_WEIGHT <= request.weight <= MAX_WEIGHT:
+        raise HTTPException(status_code=400, detail=f"weight must be {MIN_WEIGHT}-{MAX_WEIGHT}")
+    if request.rule_id in PROTECTED:
+        raise HTTPException(
+            status_code=403,
+            detail="That rule is the product's ethical floor rather than a preference — "
+            "it protects work in progress, silence when unsure, or not asking for what is "
+            "already proven. It cannot be weakened.",
+        )
+    for rule in session.rules:
+        if rule.id == request.rule_id:
+            rule.history.append(f"{rule.weight:.2f} → {request.weight:.2f}: changed by the student")
+            rule.weight = request.weight
+            rule.tuned = True
+            session.save_rules()
+            return {"rule": rule.to_dict()}
+    raise HTTPException(status_code=404, detail=f"no rule {request.rule_id!r}")
+
+
+@app.post("/api/session/{session_id}/rules/reset")
+def api_reset_weights(session_id: int, profile: str = "default") -> dict[str, Any]:
+    """Back to the shipped defaults. A tunable system must be un-tunable too."""
+    removed = _store.reset_rule_weights(profile=profile)
+    session = _session(session_id)
+    session.rules = session._load_rules()
+    return {"reset": removed}
+
+
+@app.get("/api/session/{session_id}/trace")
+def api_trace(session_id: int) -> dict[str, Any]:
+    """The last decision in full: degrees in, rules fired, outputs out."""
+    session = _session(session_id)
+    if session.last_trace is None:
+        raise HTTPException(status_code=404, detail="no decision has been made in this session yet")
+    return session.last_trace
+
+
+@app.post("/api/session/{session_id}/expert-review")
+async def api_expert_review(session_id: int) -> dict[str, Any]:
+    """Have the expert agent tune this student's weights and profile their habits."""
+    session = _session(session_id)
+    result = await asyncio.to_thread(session.expert_review)
+    return {"review": result.to_dict(), "rules": [rule.to_dict() for rule in session.rules]}
 
 
 @app.get("/api/history")

@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-PROMPT_VERSION = "2026-07-26.3"
+PROMPT_VERSION = "2026-07-26.4-fuzzy"
 
 
 CONTRACT_COMPILER = """A student is starting a study session and has described it in their own words.
@@ -73,6 +73,47 @@ Schema:
   "nudge": str,         // the line, or "" if on task
   "confidence": "low"|"medium"|"high",
   "work_text": str,     // their own visible writing, or "" if the frame shows none
+  "work_source": str}}  // where it is, e.g. "notes_tokenising.md in the editor"; "" if none"""
+
+
+PERCEIVE = """You are the perception layer of a study companion. You do not decide
+anything — you report degrees, and a separate rule engine the student can read decides
+what to do about them. So do not soften or round your numbers towards what you think
+the right outcome is; report what you see and let the rules apply the policy.
+
+The student's contract: {contract}
+
+Look at the attached frame and rate each of these from 0.0 to 1.0.
+
+topic_match — how closely the CONTENT relates to the contracted task.
+  1.0 the task itself · 0.6 same subject, adjacent material · 0.3 same field, not the
+  task · 0.0 unrelated. Judge meaning, never the application: a lecture about the task
+  on a video site is high, entertainment on that same site is 0.0, and a well-made PDF
+  for another module is low however studious it looks.
+
+is_own_work — whether this is the student's own writing rather than something they are
+  reading. 1.0 their document or handwriting with their words in it · 0.5 their work
+  beside a reference · 0.0 a video, slide deck, search page or chat.
+
+padding — how much of any visible writing is filler rather than substance.
+  0.0 dense and specific · 1.0 restatement, vague intentions, repetition. Use 0.0 when
+  there is no writing to judge.
+
+confidence — how sure you are of the above. Be honest and use low numbers freely: a
+  blurry, tiny, ambiguous or half-covered frame should score low, and the rules are
+  built to stay quiet when you do. A guess reported as certainty is the one failure
+  mode that costs the student trust.
+
+Also transcribe up to about 150 words of the student's own visible writing, if any.
+
+Schema:
+{{"topic_match": 0.0-1.0,
+  "is_own_work": 0.0-1.0,
+  "padding": 0.0-1.0,
+  "confidence": 0.0-1.0,
+  "seen": str,          // what is actually in the frame, concretely
+  "reason": str,        // one line on why topic_match got the number it did
+  "work_text": str,     // their own visible writing, or ""
   "work_source": str}}  // where it is, e.g. "notes_tokenising.md in the editor"; "" if none"""
 
 
@@ -205,3 +246,59 @@ def render(template: str, **values: Any) -> str:
         for key, value in values.items()
     }
     return template.format(**encoded)
+
+
+NUDGE_LINE = """Write the one line a study companion says to a student who has drifted.
+
+Their contract: {contract}
+What they are looking at: {seen}
+How firmly to put it: {firmness}   (gentle = a quiet word; firm = clear and direct)
+
+The rule engine has already decided to speak and how firmly. You are only writing the
+sentence.
+
+- One sentence. No shame, no exclamation marks, no questions, no instructions to
+  "focus" or "get back to work".
+- Where it fits, use their own stated reason back to them rather than any motivation
+  of your own — it is more persuasive and it is theirs.
+- Gentle means they may not even stop reading it. Firm means unmistakable, still kind.
+
+Schema: {{"line": str}}"""
+
+
+EXPERT_REVIEW = """You are reviewing how well a study companion's rule base fits one student.
+
+The companion decides what to do using fuzzy IF/THEN rules over perceived degrees. You
+can propose changes to rule WEIGHTS (0.0 to 1.5) and nothing else — not the rules
+themselves, not the thresholds. Weights are how strongly a rule competes when several
+apply at once.
+
+The rules, with their current weights:
+{rules}
+
+What happened across this student's sessions:
+{history}
+
+How they responded to interventions:
+{responses}
+
+Propose only changes the log actually supports. An unfired rule is not evidence about
+its weight. Fewer, better-justified changes are worth more than a full sweep, and
+proposing nothing is a valid answer when the log is thin.
+
+Then write a short behavioural profile. Ground it in what is observable here — when
+they drift, what precedes it, what they respond to — and in the procrastination
+literature where it genuinely applies: task aversion at the first hard step, emotion
+regulation rather than time management, self-forgiveness reducing the next lapse.
+
+This is a study-habit profile, not a psychological or clinical assessment. Do not
+diagnose, do not name conditions, do not speculate about anything beyond study
+behaviour. If the log is too thin to support a pattern, say so.
+
+Schema:
+{{"weight_changes": [{{"rule_id": str, "from": float, "to": float, "because": str}}],
+  "profile": str,           // 3-4 sentences on how this student works
+  "drift_trigger": str,     // the specific thing that precedes drift, or "" if unclear
+  "what_works": str,        // which interventions they respond to, from the evidence
+  "confidence": "low"|"medium"|"high",
+  "evidence_note": str}}    // what the log does and does not support"""

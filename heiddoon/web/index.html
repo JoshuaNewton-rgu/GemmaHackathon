@@ -47,6 +47,9 @@
     <button class="rail-btn" data-screen="history">
       <span class="pill"><svg class="ic"><use href="#i-history"/></svg></span><span class="lbl">History</span>
     </button>
+    <button class="rail-btn" data-screen="reasoning">
+      <span class="pill"><svg class="ic"><use href="#i-insights"/></svg></span><span class="lbl">Reasoning</span>
+    </button>
     <span class="spacer"></span>
     <button class="rail-btn" data-screen="privacy">
       <span class="pill"><svg class="ic"><use href="#i-lock"/></svg></span><span class="lbl">Privacy</span>
@@ -360,6 +363,67 @@
       <div class="card flat">
         <div class="eyebrow" style="margin-bottom:14px">Learner model</div>
         <div class="learner" id="h-learner"></div>
+      </div>
+    </section>
+
+    <!-- ── REASONING · the interpretable layer ──────────────────────────── -->
+    <section class="screen" id="scr-reasoning">
+      <h2 class="title">Why it did that</h2>
+      <p class="body" style="margin-top:8px;max-width:720px">
+        Gemma reads the screen into degrees. A rule base you can read decides what to do about
+        them. Nothing below is a model explaining itself after the fact — it is the arithmetic
+        that produced the decision.
+      </p>
+
+      <div class="card" style="margin-top:20px">
+        <div class="row-between">
+          <div class="eyebrow">The last decision</div>
+          <span class="spacer"></span>
+          <span class="hint mono" id="trace-when">no decision yet</span>
+        </div>
+        <div id="trace-verdict" class="verdict-line" style="margin-top:12px">
+          Start a session and let it look once, then this fills in.
+        </div>
+
+        <div class="eyebrow dim" style="margin-top:20px">What it saw, as degrees</div>
+        <div id="trace-percepts" style="margin-top:8px"></div>
+        <div class="legend-note">
+          <span class="sw" style="background:var(--primary)"></span>perceived by the model ·
+          <span class="sw" style="background:var(--tertiary)"></span>measured from the session log,
+          not guessed
+        </div>
+
+        <div class="eyebrow dim" style="margin-top:20px">Rules that fired</div>
+        <div id="trace-rules"></div>
+        <p class="hint" id="trace-silent" style="margin-top:10px"></p>
+      </div>
+
+      <div class="card">
+        <div class="row-between">
+          <div class="eyebrow">The rule base</div>
+          <span class="spacer"></span>
+          <span class="hint mono" id="rules-count"></span>
+          <button class="btn btn-text sm" id="btn-reset-rules">Reset to defaults</button>
+        </div>
+        <p class="body tight" style="margin-top:6px">
+          All of it, including rules that did not fire. Drag a weight to change how strongly a rule
+          competes when several apply at once.
+        </p>
+        <div id="rules-list" style="margin-top:12px"></div>
+      </div>
+
+      <div class="card flat">
+        <div class="row-between">
+          <div class="eyebrow">Expert review</div>
+          <span class="spacer"></span>
+          <button class="btn btn-filled sm" id="btn-expert">Review this session</button>
+        </div>
+        <p class="body tight" style="margin-top:6px">
+          An agent reads the session log and proposes weight changes, each with its reason. It may
+          only adjust weights — never the rules — and three rules are locked because they are the
+          product's ethical floor rather than preferences.
+        </p>
+        <div id="expert-out" style="margin-top:14px"></div>
       </div>
     </section>
 

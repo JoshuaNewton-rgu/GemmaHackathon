@@ -161,6 +161,7 @@ Everything is environment-driven; see [`.env.example`](.env.example).
 | `HEIDDOON_OLLAMA_MODEL` | `gemma4:12b` | |
 | `HEIDDOON_CADENCE_S` | `20` | seconds between CLI watcher check-ins |
 | `HEIDDOON_AUTO_CADENCE_S` | `60` | seconds between automatic checks in the web app |
+| `HEIDDOON_INTERPRETABLE` | `1` | fuzzy rule layer; `0` falls back to one binary verdict |
 | `HEIDDOON_PROGRESS_EVERY_MIN` | `5` | minutes between automatic progress checks; `0` = every cycle |
 | `HEIDDOON_NOTES_PROMPT_EVERY_MIN` | `25` | minutes between page prompts; `0` disables |
 | `HEIDDOON_DB` | `./heiddoon.db` | |
