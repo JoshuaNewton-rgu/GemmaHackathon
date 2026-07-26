@@ -696,3 +696,8 @@ def app_js() -> FileResponse:
 @app.get("/app.css")
 def app_css() -> FileResponse:
     return FileResponse(WEB_DIR / "app.css", media_type="text/css")
+
+
+@app.get("/angry-nudge.gif")
+def angry_nudge_gif() -> FileResponse:
+    return FileResponse(WEB_DIR / "angry-nudge.gif", media_type="image/gif")

@@ -333,6 +333,19 @@ video{width:100%;border-radius:var(--r-field);background:#000;display:block;marg
 
 /* ── dialogs: nudge, bouncer, break ────────────────────────────────────── */
 
+.nudge-image-container {
+  display: flex;
+  justify-content: center;
+  margin: 12px 0 16px 0;
+}
+
+.nudge-image {
+  width: 140px;
+  height: 140px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.15));
+}
+
 .scrim{position:fixed;inset:0;background:rgba(15,26,20,.5);display:none;place-items:center;z-index:60;padding:20px}
 .scrim.open{display:grid;animation:fade .2s ease}
 .dialog{background:var(--surface);border-radius:28px;max-width:520px;width:100%;padding:24px;box-shadow:var(--e3)}
