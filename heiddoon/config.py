@@ -51,6 +51,10 @@ class Settings:
     #: watcher's cadence by default: every check that finds a changed screen is a
     #: vision call, and an hour at 20s is 180 of them. Unchanged screens are free.
     auto_cadence_s: int = 60
+    #: Minutes between automatic progress checks on work read off the screen. Each
+    #: one is a text call, and a student typing continuously would otherwise trigger
+    #: one every cadence, so this is the throttle that makes always-on affordable.
+    progress_every_min: int = 5
     #: Minutes between "show me your page" prompts. 0 switches them off entirely.
     #: Only ever fires when nothing else has proved the student is working — see
     #: Session.should_ask_for_notes.
@@ -84,6 +88,7 @@ class Settings:
             cadence_s=int(env.get("HEIDDOON_CADENCE_S", "20")),
             artifact_settle_s=int(env.get("HEIDDOON_ARTIFACT_SETTLE_S", "5")),
             auto_cadence_s=int(env.get("HEIDDOON_AUTO_CADENCE_S", "60")),
+            progress_every_min=int(env.get("HEIDDOON_PROGRESS_EVERY_MIN", "5")),
             notes_prompt_every_min=int(env.get("HEIDDOON_NOTES_PROMPT_EVERY_MIN", "25")),
             db_path=Path(env.get("HEIDDOON_DB", str(PROJECT_ROOT / "heiddoon.db"))),
             timeout_s=float(env.get("HEIDDOON_TIMEOUT_S", "180")),

@@ -246,6 +246,24 @@
         </div>
 
         <div>
+          <div class="card flat" id="progress-card">
+            <div class="row-between">
+              <div class="eyebrow">Your work</div>
+              <span class="spacer"></span>
+              <span class="hint mono" id="progress-source">nothing read yet</span>
+            </div>
+            <div style="display:flex;align-items:baseline;gap:12px;margin-top:8px">
+              <span id="progress-words" style="font:400 40px/1 var(--sans);font-variant-numeric:tabular-nums">–</span>
+              <span class="hint" id="progress-words-label">words added this session</span>
+              <span class="spacer" style="flex:1"></span>
+              <span class="chip neutral" id="progress-verdict">not checked yet</span>
+            </div>
+            <p class="body tight" id="progress-note" style="margin-top:10px">
+              It reads whatever you are writing straight off the screen — no file to set up. Keep typing
+              and a progress check follows on its own.
+            </p>
+          </div>
+
           <div class="card">
             <div class="row-between" style="margin-bottom:6px">
               <div class="eyebrow">Verdicts</div>

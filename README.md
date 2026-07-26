@@ -20,6 +20,7 @@ on-task for *you*, and which file you're working in. Then four signals feed one 
 | **Screen** | What are you looking at, and does it mean what your contract allows? | one vision call — **skipped entirely when the screen has not changed** |
 | **Camera** | Are you here, and is there a phone in your hand? | one vision call |
 | **Artifact** | Did the work actually move? | one text call, only when the file changed |
+| **Your writing** | What are you actually writing, and is it growing? | free — read from the screen frame already being judged |
 | **Page** | What is on your paper notes, and has it grown? | one vision call, at most once per interval |
 
 The bundled contract and test set are set up for **compilers — lexical analysis and
@@ -160,6 +161,7 @@ Everything is environment-driven; see [`.env.example`](.env.example).
 | `HEIDDOON_OLLAMA_MODEL` | `gemma4:12b` | |
 | `HEIDDOON_CADENCE_S` | `20` | seconds between CLI watcher check-ins |
 | `HEIDDOON_AUTO_CADENCE_S` | `60` | seconds between automatic checks in the web app |
+| `HEIDDOON_PROGRESS_EVERY_MIN` | `5` | minutes between automatic progress checks; `0` = every cycle |
 | `HEIDDOON_NOTES_PROMPT_EVERY_MIN` | `25` | minutes between page prompts; `0` disables |
 | `HEIDDOON_DB` | `./heiddoon.db` | |
 

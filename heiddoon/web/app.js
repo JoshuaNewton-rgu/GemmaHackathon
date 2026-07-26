@@ -77,6 +77,10 @@ function forgetSession() {
   $("nav-receipt").disabled = true;
   $("feed").innerHTML = '<div class="feed-empty">Nothing yet.</div>';
   $("verdict-count").textContent = "";
+  $("progress-words").textContent = "–";
+  $("progress-verdict").textContent = "not checked yet";
+  $("progress-verdict").className = "chip neutral";
+  $("progress-source").textContent = "nothing read yet";
   $("status-text").textContent = "idle";
   state.autopilot = false;
   $("auto-toggle").classList.remove("on");
@@ -372,6 +376,7 @@ function subscribe(sessionId) {
     const event = JSON.parse(message.data);
     state.events.push(event);
     addFeedRow(event);
+    paintProgress(event);
     $("verdict-count").textContent = `${state.events.length} recorded`;
   };
 }
@@ -423,6 +428,34 @@ function addFeedRow(event) {
 
   if (event.kind === "ask_notes") { showPageAsk(detail.prompt); return; }
   if (event.on_task === false && (detail.nudge || "").length) showNudge(detail.nudge, event.seen);
+}
+
+/* Progress, kept visible. The complaint this answers is a fair one: the app was
+   reading the work and judging it, and none of that was anywhere on screen, so it
+   looked like nothing was happening. */
+function paintProgress(event) {
+  const detail = event.detail || {};
+
+  if (detail.read_work) {
+    $("progress-source").textContent = detail.work_source || "read from your screen";
+    if (!state.events.some((e) => e.kind === "diff")) {
+      $("progress-note").textContent =
+        "Read what you are writing. A progress check follows once there is enough new material.";
+    }
+  }
+
+  if (event.kind !== "diff") return;
+
+  const diffs = state.events.filter((e) => e.kind === "diff");
+  const words = diffs.reduce((total, e) => total + (e.detail.delta_words || 0), 0);
+  $("progress-words").textContent = words >= 0 ? `+${words}` : String(words);
+  $("progress-words-label").textContent =
+    detail.source === "paper" ? "words added, from your page" : "words added this session";
+
+  const chip = $("progress-verdict");
+  chip.textContent = detail.verdict || "checked";
+  chip.className = "chip " + ({ progress: "allow", padding: "block", stalled: "neutral" }[detail.verdict] || "neutral");
+  $("progress-note").textContent = detail.quality_note || detail.summary || "";
 }
 
 /* ── frames ─────────────────────────────────────────────────────────────── */
