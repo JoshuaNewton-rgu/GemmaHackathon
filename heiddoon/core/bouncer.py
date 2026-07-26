@@ -1,9 +1,9 @@
 """F5 — the Bouncer: breaks are earned, not stolen.
 
-Ask for a break, answer one retrieval question generated from your own notes. The
-point is not to make breaks hard; it is that the price of a break is a rep of
-retrieval practice, which is the single best-evidenced study technique there is. And
-a break you are allowed to ask for is a break you never have to steal.
+Ask for a break, answer retrieval questions generated from work the watcher positively
+matched to the study contract. The point is not to make breaks hard; it is that the
+price of a break is a rep of retrieval practice. A break you are allowed to ask for
+is a break you never have to steal.
 """
 
 from __future__ import annotations
@@ -12,7 +12,8 @@ import re
 
 from .. import prompts
 from ..providers import CallMeta, Provider
-from ..schemas import Contract, Grade, Quiz
+from ..schemas import Contract, Grade, Quiz, QuizQuestion, QuizResult, QuizSet
+from ..study import extract_concepts
 
 _WORD = re.compile(r"\b[\w'-]+\b")
 _EXCLAMATIONS = re.compile(r"[!]+")
@@ -154,3 +155,120 @@ def _significant_overlap(point_words: set[str], answer_words: set[str], threshol
 def break_granted_line(contract: Contract, minutes: int = 10) -> str:
     """What the app says when the break is earned."""
     return f"Break earned — {minutes} minutes. I will come and get you for {contract.task or 'the next stretch'}."
+
+
+def ask_quiz_set(
+    provider: Provider,
+    positive_work: str,
+    *,
+    contract: Contract | None = None,
+    difficulty: str = "same",
+    max_chars: int = 6000,
+) -> tuple[QuizSet, CallMeta]:
+    """Create five questions from work positively matched to the contract."""
+    has_verified_work = len(_WORD.findall(positive_work or "")) >= MIN_NOTES_WORDS
+    if has_verified_work:
+        prompt = prompts.render(
+            prompts.BOUNCER_QUIZ_SET,
+            positive_work=positive_work[:max_chars],
+            difficulty=difficulty,
+        )
+        source = "work confirmed by positive verdicts"
+        subject = contract.task if contract else ""
+    elif contract is not None and contract.task:
+        prompt = prompts.render(
+            prompts.BOUNCER_TOPIC_QUIZ_SET,
+            contract=contract.for_prompt(),
+            difficulty=difficulty,
+        )
+        source = "your contract — no positive work verdict yet"
+        subject = contract.task
+    else:
+        raise ValueError("record some contract-related work before asking for a break")
+
+    raw, meta = provider.complete_json(prompt, max_tokens=1000)
+    raw_questions = raw.get("questions", []) if isinstance(raw, dict) else []
+    questions = []
+    for index, item in enumerate(raw_questions[:5], start=1):
+        if not isinstance(item, dict):
+            continue
+        question = QuizQuestion.from_dict({"id": f"q{index}", **item})
+        if question.question and question.answer:
+            questions.append(question)
+
+    if len(questions) != 5:
+        concepts = extract_concepts(positive_work or subject, limit=5)
+        while len(concepts) < 5:
+            concepts.append(subject or f"idea {len(concepts) + 1}")
+        questions = [
+            QuizQuestion(
+                id=f"q{index}",
+                question=f"Explain {concept} in your own words.",
+                answer=concept,
+                concept=concept,
+                kind="recall",
+            )
+            for index, concept in enumerate(concepts[:5], start=1)
+        ]
+        meta.repairs.append("quiz set repaired to exactly five questions")
+
+    quiz = QuizSet(questions=questions, subject=subject, source=source)
+    quiz._meta = meta.to_dict()
+    return quiz, meta
+
+
+def grade_quiz_set(
+    provider: Provider,
+    quiz: QuizSet,
+    answers: list[str],
+) -> tuple[QuizResult, CallMeta]:
+    """Grade all five answers in one call, with a deterministic fallback."""
+    normalized = [(answer or "").strip() for answer in answers[:5]]
+    normalized.extend([""] * (5 - len(normalized)))
+    no_call = CallMeta(provider=provider.name, model=provider.model, latency_s=0.0, attempts=0, ok=True)
+    if all(len(_WORD.findall(answer)) < MIN_ANSWER_WORDS for answer in normalized):
+        return QuizResult(
+            answers=normalized,
+            correct=[False] * 5,
+            score=0,
+            feedback=["Give the idea a real try before checking."] * 5,
+        ), no_call
+
+    raw, meta = provider.complete_json(
+        prompts.render(
+            prompts.BOUNCER_GRADE_SET,
+            questions=[
+                {"question": question.question, "expected_idea": question.answer}
+                for question in quiz.questions
+            ],
+            answers=normalized,
+        ),
+        max_tokens=700,
+    )
+    correct = raw.get("correct", []) if isinstance(raw, dict) else []
+    feedback = raw.get("feedback", []) if isinstance(raw, dict) else []
+    if not meta.ok or len(correct) != 5:
+        correct = [
+            len(_WORD.findall(answer)) >= MIN_ANSWER_WORDS
+            and _significant_overlap(
+                {word.lower() for word in _WORD.findall(question.answer)},
+                {word.lower() for word in _WORD.findall(answer)},
+                threshold=0.3,
+            )
+            for question, answer in zip(quiz.questions, normalized)
+        ]
+        feedback = [
+            "Core idea recalled." if passed else f"Review: {question.answer}"
+            for question, passed in zip(quiz.questions, correct)
+        ]
+        meta.repairs.append("quiz graded by key-point overlap")
+
+    flags = [bool(item) for item in correct[:5]]
+    lines = [str(item) for item in feedback[:5]]
+    lines.extend([""] * (5 - len(lines)))
+    return QuizResult(
+        answers=normalized,
+        correct=flags,
+        score=sum(flags) * 20,
+        feedback=lines,
+    ), meta

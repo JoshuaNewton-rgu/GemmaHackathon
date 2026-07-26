@@ -78,10 +78,13 @@
     <h1 id="bar-title">New session</h1>
     <span class="spacer"></span>
     <span class="bar-note" id="bar-note"></span>
-    <button class="icon-btn" id="btn-theme" type="button" aria-pressed="false" aria-label="Switch to dark">
       <svg class="ic"><use href="#i-moon"/></svg>
     </button>
     <span class="model-badge" id="model-badge">checking…</span>
+    <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Switch to dark mode">
+      <svg class="ic sm"><use id="theme-icon" href="#i-moon"/></svg>
+      <span id="theme-label">Dark</span>
+    </button>
   </header>
 
   <main class="stage">
@@ -92,8 +95,23 @@
 
         <div>
           <div class="field">
-            <label for="contract-text">What is today for</label>
+            <label for="contract-text">What are you studying today?</label>
             <textarea id="contract-text" rows="7" maxlength="600" placeholder="Two hours on algorithms — sorting and Big-O. Lecture videos, the course PDFs and the Python docs are fine. No social media, no entertainment video. I'm writing into notes_sorting.md. Merge sort is the part I keep putting off and the coursework is due Friday."></textarea>
+          </div>
+          <div class="grid study-setup">
+            <div class="field">
+              <label for="study-subject">Subject</label>
+              <input id="study-subject" maxlength="80" placeholder="e.g. Thermodynamics">
+            </div>
+            <div class="field">
+              <label for="study-due-date">Due date (optional)</label>
+              <input id="study-due-date" type="date">
+            </div>
+            <div class="field">
+              <label for="study-duration">Study block (5–120 mins)</label>
+              <input id="study-duration" type="number" min="5" max="120" step="1" value="45"
+                     inputmode="numeric">
+            </div>
           </div>
           <div class="field-foot">
             <span>Plain words. It will quote you back.</span>
@@ -149,26 +167,26 @@
             <div><div class="k">blocked</div><div class="chips" id="c-blocked"></div></div>
             <div><div class="k">artifact</div><div class="v mono" id="c-artifacts"></div></div>
             <div><div class="k">why it matters</div><div class="v quote" id="c-why"></div></div>
-            <div><div class="k">tone of nudges</div>
+            <div><div class="k">coach persona</div>
               <div class="segmented" id="c-tone">
-                <button data-tone="calm">
-                  <span class="tone-label">Calm</span>
-                  <span class="tone-sample">“Take it steady.”</span>
+                <button data-tone="scottish_granny">
+                  <span class="tone-label">Scottish Granny</span>
+                  <span class="tone-sample">Warm, blunt</span>
                 </button>
-                <button data-tone="angry">
-                  <span class="tone-label">Angry</span>
-                  <span class="tone-sample">“Get back to work.”</span>
+                <button data-tone="disappointed_mother">
+                  <span class="tone-label">Disappointed Mother</span>
+                  <span class="tone-sample">Caring, firm</span>
                 </button>
-                <button data-tone="blunt">
-                  <span class="tone-label">Blunt</span>
-                  <span class="tone-sample">“Focus. Now.”</span>
+                <button data-tone="angry_father">
+                  <span class="tone-label">Angry Father</span>
+                  <span class="tone-sample">Strict, fair</span>
                 </button>
               </div>
             </div>
             <div><div class="k">ends</div><div class="v" id="c-ends"></div></div>
           </div>
 
-          <button class="btn btn-filled block hidden" id="btn-start" style="margin-top:20px">Start watching</button>
+          <button class="btn btn-filled block hidden" id="btn-start" style="margin-top:20px">Start run</button>
         </div>
       </div>
     </section>
@@ -186,8 +204,8 @@
                         stroke-linecap="round" stroke-dasharray="503" stroke-dashoffset="503"/>
               </svg>
               <div class="mid"><div>
-                <div class="big" id="clock">0:00</div>
-                <div class="lbl">elapsed</div>
+                <div class="big" id="clock">45:00</div>
+                <div class="lbl">remaining</div>
               </div></div>
             </div>
             <div class="status-chip" id="status-chip"><span class="dot"></span><span id="status-text">idle</span></div>
@@ -276,9 +294,9 @@
 
           <div class="card">
             <h3 class="sub">Ask for a break</h3>
-            <p class="body tight" style="margin-top:4px">One question from your own notes, then it's yours.</p>
+            <p class="body tight" style="margin-top:4px">Get at least 3 of 5 questions right to earn the full break.</p>
             <div class="actions" style="margin-top:12px">
-              <button class="btn btn-outline sm" id="btn-break">Can I have ten minutes</button>
+              <button class="btn btn-outline sm" id="btn-break">Earn a break</button>
             </div>
           </div>
         </div>
@@ -300,6 +318,10 @@
               It reads whatever you are writing straight off the screen — no file to set up. Keep typing
               and a progress check follows on its own.
             </p>
+            <div class="score-strip hidden" id="proof-score">
+              <div><span class="score-number" id="proof-score-number">0</span><span>/100 proof score</span></div>
+              <div class="hint" id="proof-score-breakdown"></div>
+            </div>
           </div>
 
           <div class="card">
@@ -312,7 +334,7 @@
           </div>
 
           <div class="actions end" style="margin-top:16px">
-            <button class="btn btn-filled" id="btn-finish">End session &amp; get my receipt</button>
+            <button class="btn btn-filled" id="btn-finish">Upload proof &amp; finish</button>
           </div>
         </div>
       </div>
@@ -329,7 +351,8 @@
           <p id="r-autopsy">–</p>
         </div>
         <div class="streak-card">
-          <div class="eyebrow" id="r-streak-label">Sessions</div>
+          <div class="eyebrow" id="r-streak-label">ProofStudy progress</div>
+          <div class="gamification-line"><strong id="r-level">Level 1</strong><span id="r-xp">0 XP</span><span id="r-streak-count">0 day streak</span></div>
           <div class="streak-days" id="r-streak"></div>
           <p id="r-streak-note">A lapse is not a relapse — the streak carries on regardless.</p>
         </div>
@@ -516,10 +539,8 @@
       <span class="spacer" style="flex:1"></span>
       <span class="hint mono" id="bouncer-source">from your own notes</span>
     </div>
-    <h2>Before you go — say this back without looking</h2>
-    <p class="body" id="bouncer-question">…</p>
-    <div class="field"><label for="bouncer-answer">Your answer</label>
-      <textarea id="bouncer-answer" rows="4" placeholder="From memory. A rough version of the idea counts."></textarea></div>
+    <h2>Answer from memory to unlock your break</h2>
+    <div id="bouncer-questions" class="quiz-list"></div>
     <div class="result hidden" id="bouncer-result">
       <svg class="ic"><use href="#i-check"/></svg>
       <div><div class="t" id="bouncer-result-title"></div><div class="d" id="bouncer-result-detail"></div></div>

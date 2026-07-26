@@ -109,11 +109,6 @@
   --e3:0 4px 8px 3px rgba(0,0,0,.15),0 1px 3px rgba(0,0,0,.3);
 }
 
-/* Dark. The same tokens, re-valued — M3 dark pairs a light tone with a dark
-   container, so the roles swap rather than the colours simply darkening.
-   `data-theme` is set on <html> before first paint by the inline script in
-   index.html, from the student's stored choice or the OS setting, so nothing
-   flashes the wrong theme on load. */
 :root[data-theme="dark"]{
   color-scheme:dark;
 
@@ -171,9 +166,9 @@
 
   /* The page is already dark, so the shadows that separated cards from a light
      surface only muddy them. Elevation is carried by the borders instead. */
-  --e1:0 1px 2px rgba(0,0,0,.5);
-  --e2:0 1px 3px rgba(0,0,0,.5),0 2px 6px rgba(0,0,0,.3);
-  --e3:0 6px 16px rgba(0,0,0,.55);
+   --e1:0 1px 2px rgba(0,0,0,.5);
+   --e2:0 1px 3px rgba(0,0,0,.5),0 2px 6px rgba(0,0,0,.3);
+   --e3:0 6px 16px rgba(0,0,0,.55);
 }
 
 *{box-sizing:border-box;margin:0;padding:0}
@@ -195,7 +190,7 @@
    (#F7FAF6), not the doc's canvas grey. Filled fields are `surface-variant`
    (#E6EBE4) and need something lighter to sit on — with the canvas colour here
    they vanished into the page. */
-body{background:var(--surface);color:var(--on-surface);font-family:var(--sans);font-size:14px;line-height:1.5;min-height:100vh;-webkit-font-smoothing:antialiased}
+body{background:var(--surface);color:var(--on-surface);font-family:var(--sans);font-size:14px;line-height:1.5;min-height:100vh;-webkit-font-smoothing:antialiased;transition:background .18s,color .18s}
 button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
 button:disabled{opacity:.38;cursor:not-allowed}
 svg.ic{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}
@@ -227,6 +222,9 @@ svg.ic.filled{fill:currentColor;stroke:none}
 .model-badge{padding:6px 12px;border-radius:var(--r-chip);background:var(--secondary-container);color:var(--on-secondary-container);font:500 11.5px var(--mono);white-space:nowrap}
 .model-badge.down{background:var(--error-container);color:var(--on-error-container)}
 .model-badge.mock{background:var(--mock-bg);color:var(--on-mock)}
+.theme-toggle{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:5px 10px;border:1px solid var(--outline-variant);border-radius:var(--r-pill);color:var(--on-surface-variant);font:500 12px var(--sans)}
+.theme-toggle:hover{background:var(--surface-variant);color:var(--on-surface)}
+html[data-theme="dark"] .icon-btn:hover:not(:disabled){background:rgba(255,255,255,.08)}
 .bar-note{font:400 11.5px var(--mono);color:var(--on-surface-dim)}
 
 .stage{padding:0 28px 56px;max-width:1080px}
@@ -286,9 +284,19 @@ p.body.tight{font-size:14px}
 .field:focus-within{border-bottom-color:var(--primary)}
 .field label{display:block;font:400 11px var(--sans);color:var(--on-surface-variant);margin-bottom:5px}
 .field:focus-within label{color:var(--primary)}
-.field textarea,.field input{width:100%;border:none;background:none;outline:none;resize:vertical;font:400 14px/1.65 var(--sans);color:var(--on-surface)}
+.field textarea,.field input,.field select{width:100%;border:none;background:none;outline:none;resize:vertical;font:400 14px/1.65 var(--sans);color:var(--on-surface)}
 .field textarea::placeholder,.field input::placeholder{color:var(--on-surface-dim)}
 .field-foot{display:flex;justify-content:space-between;gap:12px;padding:6px 16px 0;font:400 11px var(--sans);color:var(--on-surface-variant)}
+.study-setup{grid-template-columns:minmax(180px,1fr) 170px 180px;margin-top:16px}
+@media (max-width:700px){.study-setup{grid-template-columns:1fr}}
+.score-strip{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-top:16px;padding:14px;border-radius:var(--r-inner);background:var(--primary-container);color:var(--on-primary-container)}
+.score-number{font:500 30px/1 var(--sans);margin-right:4px}
+.gamification-line{display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;color:var(--on-secondary-strong)}
+.quiz-list{display:flex;flex-direction:column;gap:12px;margin:18px 0;max-height:55vh;overflow-y:auto;padding-right:4px}
+.quiz-question{padding:14px;border-radius:var(--r-inner);background:var(--surface-container)}
+.quiz-question .number{font:500 11px var(--mono);color:var(--primary);text-transform:uppercase}
+.quiz-question p{font:500 14px/1.45 var(--sans);margin:5px 0 10px}
+.quiz-question textarea{width:100%;min-height:64px;border:1px solid var(--outline-variant);border-radius:10px;padding:10px;background:var(--surface);font:400 14px/1.45 var(--sans);resize:vertical}
 
 /* ── chips ─────────────────────────────────────────────────────────────── */
 

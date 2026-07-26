@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import asdict, dataclass, field
+from datetime import date
 from typing import Any, Literal
 
 FrameKind = Literal["screen", "camera"]
@@ -351,6 +352,224 @@ class Receipt(_Base):
         data = super().to_dict(include_internals)
         data["learner_model"] = self.learner_model.to_dict(include_internals)
         return data
+
+
+# ── ProofStudy MVP contracts ────────────────────────────────────────────────
+
+
+@dataclass
+class StudyMetadata(_Base):
+    """The small, user-selected description of a study session."""
+
+    subject: str = ""
+    planned_duration_min: int = 25
+    persona_id: str = "scottish_granny"
+    due_date: str = ""
+
+    @classmethod
+    def from_dict(cls, raw: dict[str, Any]) -> StudyMetadata:
+        repairs: list[str] = []
+        duration = _int(raw.get("planned_duration_min"), 25, "planned_duration_min", repairs)
+        if duration < 5:
+            repairs.append("planned_duration_min: below minimum, using 5")
+            duration = 5
+        elif duration > 120:
+            repairs.append("planned_duration_min: above maximum, using 120")
+            duration = 120
+        raw_due_date = raw.get("due_date")
+        due_date = "" if raw_due_date in (None, "") else _str(raw_due_date, "", "due_date", repairs)
+        if due_date:
+            try:
+                date.fromisoformat(due_date)
+            except ValueError:
+                repairs.append("due_date: expected YYYY-MM-DD, ignoring invalid value")
+                due_date = ""
+        return cls(
+            subject=_str(raw.get("subject"), "", "subject", repairs),
+            planned_duration_min=duration,
+            persona_id=_str(raw.get("persona_id"), "scottish_granny", "persona_id", repairs),
+            due_date=due_date,
+            _repairs=repairs,
+        )
+
+
+@dataclass
+class ProgressComponents(_Base):
+    """Point contributions to a progress score; the fields sum to ``total``."""
+
+    completion: int = 0
+    word_growth: int = 0
+    new_concepts: int = 0
+    diff_verdict: int = 0
+
+    @property
+    def total(self) -> int:
+        return self.completion + self.word_growth + self.new_concepts + self.diff_verdict
+
+    @classmethod
+    def from_dict(cls, raw: dict[str, Any]) -> ProgressComponents:
+        return cls(
+            completion=max(0, min(35, int(raw.get("completion", 0)))),
+            word_growth=max(0, min(30, int(raw.get("word_growth", 0)))),
+            new_concepts=max(0, min(20, int(raw.get("new_concepts", 0)))),
+            diff_verdict=max(0, min(15, int(raw.get("diff_verdict", 0)))),
+        )
+
+
+@dataclass
+class ProgressScore(_Base):
+    """A transparent 0–100 score and the evidence used to calculate it."""
+
+    score: int = 0
+    components: ProgressComponents = field(default_factory=ProgressComponents)
+    completion_ratio: float = 0.0
+    substantive_word_growth: int = 0
+    concepts: list[str] = field(default_factory=list)
+    new_concepts: list[str] = field(default_factory=list)
+    diff_verdict: str = "stalled"
+
+    def __post_init__(self) -> None:
+        self.score = max(0, min(100, int(self.score)))
+
+    @classmethod
+    def from_dict(cls, raw: dict[str, Any]) -> ProgressScore:
+        nested = raw.get("components", {})
+        components = ProgressComponents.from_dict(nested if isinstance(nested, dict) else {})
+        return cls(
+            score=int(raw.get("score", components.total)),
+            components=components,
+            completion_ratio=max(0.0, min(1.0, float(raw.get("completion_ratio", 0.0)))),
+            substantive_word_growth=max(0, int(raw.get("substantive_word_growth", 0))),
+            concepts=[str(item) for item in raw.get("concepts", [])],
+            new_concepts=[str(item) for item in raw.get("new_concepts", [])],
+            diff_verdict=str(raw.get("diff_verdict", "stalled")),
+        )
+
+    def to_dict(self, include_internals: bool = False) -> dict[str, Any]:
+        data = super().to_dict(include_internals)
+        data["components"] = self.components.to_dict(include_internals)
+        return data
+
+
+@dataclass
+class QuizQuestion(_Base):
+    id: str = ""
+    question: str = ""
+    answer: str = ""
+    concept: str = ""
+    kind: str = "recall"
+
+    @classmethod
+    def from_dict(cls, raw: dict[str, Any]) -> QuizQuestion:
+        return cls(
+            id=str(raw.get("id", "")).strip(),
+            question=str(raw.get("question", "")).strip(),
+            answer=str(
+                raw.get(
+                    "answer",
+                    raw.get("expected_answer", " ".join(str(item) for item in raw.get("key_points", []))),
+                )
+            ).strip(),
+            concept=str(raw.get("concept", "")).strip(),
+            kind=str(raw.get("kind", "recall")).strip(),
+        )
+
+
+@dataclass
+class QuizSet(_Base):
+    """A ProofStudy retrieval set. MVP sets always contain five questions."""
+
+    questions: list[QuizQuestion] = field(default_factory=list)
+    subject: str = ""
+    source: str = "your own notes"
+
+    def __post_init__(self) -> None:
+        if len(self.questions) != 5:
+            raise ValueError("a quiz set must contain exactly 5 questions")
+
+    @classmethod
+    def from_dict(cls, raw: dict[str, Any]) -> QuizSet:
+        questions = [
+            item if isinstance(item, QuizQuestion) else QuizQuestion.from_dict(item)
+            for item in raw.get("questions", [])
+            if isinstance(item, (dict, QuizQuestion))
+        ]
+        return cls(
+            questions=questions,
+            subject=str(raw.get("subject", "")).strip(),
+            source=str(raw.get("source", "your own notes")).strip(),
+        )
+
+
+@dataclass
+class QuizResult(_Base):
+    """The answers and outcome for one five-question attempt."""
+
+    answers: list[str] = field(default_factory=list)
+    correct: list[bool] = field(default_factory=list)
+    score: int = 0
+    feedback: list[str] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        if len(self.answers) != 5 or len(self.correct) != 5:
+            raise ValueError("a quiz result must contain exactly 5 answers and 5 verdicts")
+        self.score = max(0, min(100, int(self.score)))
+
+    @classmethod
+    def from_dict(cls, raw: dict[str, Any]) -> QuizResult:
+        correct = [bool(item) for item in raw.get("correct", [])]
+        score = raw.get("score", round(sum(correct) * 20))
+        return cls(
+            answers=[str(item) for item in raw.get("answers", [])],
+            correct=correct,
+            score=int(score),
+            feedback=[str(item) for item in raw.get("feedback", [])],
+        )
+
+
+@dataclass
+class CoachFeedback(_Base):
+    message: str = ""
+    strengths: list[str] = field(default_factory=list)
+    next_steps: list[str] = field(default_factory=list)
+    persona_id: str = "scottish_granny"
+
+    @classmethod
+    def from_dict(cls, raw: dict[str, Any]) -> CoachFeedback:
+        return cls(
+            message=str(raw.get("message", "")).strip(),
+            strengths=[str(item) for item in raw.get("strengths", [])],
+            next_steps=[str(item) for item in raw.get("next_steps", [])],
+            persona_id=str(raw.get("persona_id", "scottish_granny")),
+        )
+
+
+@dataclass
+class GamificationState(_Base):
+    xp: int = 0
+    level: int = 1
+    streak_days: int = 0
+    last_study_date: str | None = None
+
+    def __post_init__(self) -> None:
+        self.xp = max(0, int(self.xp))
+        self.level = max(1, int(self.level))
+        self.streak_days = max(0, int(self.streak_days))
+
+    @classmethod
+    def from_dict(cls, raw: dict[str, Any]) -> GamificationState:
+        return cls(
+            xp=raw.get("xp", 0),
+            level=raw.get("level", 1),
+            streak_days=raw.get("streak_days", 0),
+            last_study_date=raw.get("last_study_date"),
+        )
+
+
+# Descriptive compatibility names used by early ProofStudy callers.
+ProgressBreakdown = ProgressComponents
+StudyProgress = ProgressScore
+QuizAttemptResult = QuizResult
 
 
 @dataclass

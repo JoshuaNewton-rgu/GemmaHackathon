@@ -18,15 +18,28 @@ import json
 import sqlite3
 import time
 from contextlib import contextmanager
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
 from .config import settings
-from .schemas import Contract, Event, LearnerModel, Receipt
+from .personas import resolve_persona_id
+from .schemas import (
+    Contract,
+    Event,
+    GamificationState,
+    LearnerModel,
+    ProgressScore,
+    QuizResult,
+    QuizSet,
+    Receipt,
+    StudyMetadata,
+)
+from .study import calculate_level
 
 #: Bumped when SCHEMA changes. Stored in the file's `user_version` so a connection
 #: can tell an initialised database from an empty one.
-SCHEMA_VERSION = 2  # 2 adds rule_weights
+SCHEMA_VERSION = 4  # 4 adds an optional study due date
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS sessions (
@@ -35,7 +48,11 @@ CREATE TABLE IF NOT EXISTS sessions (
     started_at    REAL    NOT NULL,
     ended_at      REAL,
     contract_json TEXT    NOT NULL,
-    receipt_json  TEXT
+    receipt_json  TEXT,
+    subject       TEXT    NOT NULL DEFAULT '',
+    planned_duration_min INTEGER NOT NULL DEFAULT 25,
+    persona_id    TEXT    NOT NULL DEFAULT 'scottish_granny',
+    due_date      TEXT    NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS events (
@@ -76,6 +93,48 @@ CREATE TABLE IF NOT EXISTS learner (
     model_json TEXT NOT NULL,
     updated_at REAL NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS study_progress (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id    INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    at            REAL    NOT NULL,
+    progress_json TEXT    NOT NULL
+);
+CREATE INDEX IF NOT EXISTS progress_by_session ON study_progress(session_id, at);
+
+CREATE TABLE IF NOT EXISTS quiz_attempts (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id  INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    at          REAL    NOT NULL,
+    quiz_json   TEXT    NOT NULL,
+    result_json TEXT    NOT NULL
+);
+CREATE INDEX IF NOT EXISTS quizzes_by_session ON quiz_attempts(session_id, at);
+
+CREATE TABLE IF NOT EXISTS gamification (
+    profile         TEXT PRIMARY KEY,
+    xp              INTEGER NOT NULL DEFAULT 0,
+    level           INTEGER NOT NULL DEFAULT 1,
+    streak_days     INTEGER NOT NULL DEFAULT 0,
+    last_study_date TEXT,
+    updated_at      REAL NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS session_xp (
+    session_id INTEGER PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
+    profile    TEXT    NOT NULL,
+    xp         INTEGER NOT NULL,
+    awarded_at REAL    NOT NULL
+);
+
+-- A transcription of the latest paper notes, never the source photo.
+CREATE TABLE IF NOT EXISTS paper_notes_profile (
+    profile    TEXT PRIMARY KEY,
+    session_id INTEGER REFERENCES sessions(id) ON DELETE SET NULL,
+    at         REAL NOT NULL,
+    sha256     TEXT NOT NULL,
+    content    TEXT NOT NULL
+);
 """
 
 
@@ -112,21 +171,72 @@ class Store:
             # next connection succeeds against an empty database and every write
             # then fails with "no such table: events" from deep inside a request.
             # `user_version` is a cheap, standard marker to detect that.
-            if connection.execute("PRAGMA user_version").fetchone()[0] < SCHEMA_VERSION:
+            version = connection.execute("PRAGMA user_version").fetchone()[0]
+            if version < SCHEMA_VERSION:
                 connection.executescript(SCHEMA)
+                if version < 3:
+                    self._migrate_v3(connection)
+                if version < 4:
+                    self._migrate_v4(connection)
                 connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             yield connection
             connection.commit()
         finally:
             connection.close()
 
+    @staticmethod
+    def _migrate_v3(connection: sqlite3.Connection) -> None:
+        """Add v3 session columns when opening a populated v2 database."""
+        columns = {row["name"] for row in connection.execute("PRAGMA table_info(sessions)").fetchall()}
+        additions = {
+            "subject": "TEXT NOT NULL DEFAULT ''",
+            "planned_duration_min": "INTEGER NOT NULL DEFAULT 25",
+            "persona_id": "TEXT NOT NULL DEFAULT 'scottish_granny'",
+        }
+        for name, declaration in additions.items():
+            if name not in columns:
+                connection.execute(f"ALTER TABLE sessions ADD COLUMN {name} {declaration}")
+
+    @staticmethod
+    def _migrate_v4(connection: sqlite3.Connection) -> None:
+        """Add the optional due date without rebuilding existing databases."""
+        columns = {row["name"] for row in connection.execute("PRAGMA table_info(sessions)").fetchall()}
+        if "due_date" not in columns:
+            connection.execute("ALTER TABLE sessions ADD COLUMN due_date TEXT NOT NULL DEFAULT ''")
+
     # ── sessions ────────────────────────────────────────────────────────────
 
-    def start_session(self, contract: Contract, *, profile: str = "default") -> int:
+    def start_session(
+        self,
+        contract: Contract,
+        *,
+        profile: str = "default",
+        study_metadata: StudyMetadata | None = None,
+        metadata: StudyMetadata | None = None,
+        subject: str = "",
+        planned_duration_min: int = 25,
+        persona_id: str = "scottish_granny",
+    ) -> int:
+        study = study_metadata or metadata or StudyMetadata(
+            subject=subject,
+            planned_duration_min=max(1, int(planned_duration_min)),
+            persona_id=resolve_persona_id(persona_id),
+        )
+        study.persona_id = resolve_persona_id(study.persona_id)
         with self._connect() as connection:
             cursor = connection.execute(
-                "INSERT INTO sessions (profile, started_at, contract_json) VALUES (?, ?, ?)",
-                (profile, time.time(), json.dumps(contract.to_dict())),
+                "INSERT INTO sessions "
+                "(profile, started_at, contract_json, subject, planned_duration_min, persona_id, due_date) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    profile,
+                    time.time(),
+                    json.dumps(contract.to_dict()),
+                    study.subject,
+                    max(1, int(study.planned_duration_min)),
+                    study.persona_id,
+                    study.due_date,
+                ),
             )
             return int(cursor.lastrowid)
 
@@ -149,7 +259,48 @@ class Store:
             "ended_at": row["ended_at"],
             "contract": json.loads(row["contract_json"]),
             "receipt": json.loads(row["receipt_json"]) if row["receipt_json"] else None,
+            "study_metadata": {
+                "subject": row["subject"],
+                "planned_duration_min": row["planned_duration_min"],
+                "persona_id": row["persona_id"],
+                "due_date": row["due_date"],
+            },
         }
+
+    def save_study_metadata(self, session_id: int, metadata: StudyMetadata) -> None:
+        persona_id = resolve_persona_id(metadata.persona_id)
+        with self._connect() as connection:
+            cursor = connection.execute(
+                "UPDATE sessions SET subject = ?, planned_duration_min = ?, persona_id = ?, due_date = ? "
+                "WHERE id = ?",
+                (
+                    metadata.subject,
+                    max(1, int(metadata.planned_duration_min)),
+                    persona_id,
+                    metadata.due_date,
+                    session_id,
+                ),
+            )
+            if cursor.rowcount == 0:
+                raise SessionGone(f"session {session_id} no longer exists")
+
+    set_study_metadata = save_study_metadata
+    update_session_study_metadata = save_study_metadata
+
+    def get_study_metadata(self, session_id: int) -> StudyMetadata | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT subject, planned_duration_min, persona_id, due_date FROM sessions WHERE id = ?",
+                (session_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return StudyMetadata(
+            subject=row["subject"],
+            planned_duration_min=row["planned_duration_min"],
+            persona_id=resolve_persona_id(row["persona_id"]),
+            due_date=row["due_date"],
+        )
 
     def active_session_id(self, *, profile: str = "default") -> int | None:
         with self._connect() as connection:
@@ -251,6 +402,230 @@ class Store:
                 (session_id, path),
             ).fetchone()
         return {"at": row["at"], "sha256": row["sha256"], "content": row["content"]} if row else None
+
+    # ── ProofStudy progress and quizzes ─────────────────────────────────────
+
+    def save_progress(self, session_id: int, progress: ProgressScore, *, at: float | None = None) -> int:
+        try:
+            with self._connect() as connection:
+                cursor = connection.execute(
+                    "INSERT INTO study_progress (session_id, at, progress_json) VALUES (?, ?, ?)",
+                    (session_id, at if at is not None else time.time(), json.dumps(progress.to_dict())),
+                )
+                return int(cursor.lastrowid)
+        except sqlite3.IntegrityError as exc:
+            raise SessionGone(f"session {session_id} no longer exists") from exc
+
+    save_study_progress = save_progress
+    record_progress = save_progress
+
+    def progress_history(self, session_id: int) -> list[ProgressScore]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT progress_json FROM study_progress WHERE session_id = ? ORDER BY at, id",
+                (session_id,),
+            ).fetchall()
+        return [ProgressScore.from_dict(json.loads(row["progress_json"])) for row in rows]
+
+    def latest_progress(self, session_id: int) -> ProgressScore | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT progress_json FROM study_progress WHERE session_id = ? ORDER BY at DESC, id DESC LIMIT 1",
+                (session_id,),
+            ).fetchone()
+        return ProgressScore.from_dict(json.loads(row["progress_json"])) if row else None
+
+    get_progress = latest_progress
+
+    def save_quiz_attempt(
+        self,
+        session_id: int,
+        quiz: QuizSet,
+        result: QuizResult,
+        *,
+        at: float | None = None,
+    ) -> int:
+        try:
+            with self._connect() as connection:
+                cursor = connection.execute(
+                    "INSERT INTO quiz_attempts (session_id, at, quiz_json, result_json) VALUES (?, ?, ?, ?)",
+                    (
+                        session_id,
+                        at if at is not None else time.time(),
+                        json.dumps(quiz.to_dict()),
+                        json.dumps(result.to_dict()),
+                    ),
+                )
+                return int(cursor.lastrowid)
+        except sqlite3.IntegrityError as exc:
+            raise SessionGone(f"session {session_id} no longer exists") from exc
+
+    def quiz_attempts(self, session_id: int) -> list[dict[str, Any]]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT id, at, quiz_json, result_json FROM quiz_attempts "
+                "WHERE session_id = ? ORDER BY at, id",
+                (session_id,),
+            ).fetchall()
+        return [
+            {
+                "id": row["id"],
+                "at": row["at"],
+                "quiz": QuizSet.from_dict(json.loads(row["quiz_json"])),
+                "result": QuizResult.from_dict(json.loads(row["result_json"])),
+            }
+            for row in rows
+        ]
+
+    get_quiz_attempts = quiz_attempts
+    record_quiz_attempt = save_quiz_attempt
+
+    # ── profile continuity and gamification ─────────────────────────────────
+
+    def save_paper_notes_snapshot(
+        self,
+        content: str,
+        *,
+        profile: str = "default",
+        session_id: int | None = None,
+        at: float | None = None,
+    ) -> str:
+        """Keep the latest transcription for the profile; never store an image."""
+        digest = hashlib.sha256(content.encode("utf-8")).hexdigest()
+        with self._connect() as connection:
+            connection.execute(
+                "INSERT INTO paper_notes_profile (profile, session_id, at, sha256, content) VALUES (?, ?, ?, ?, ?) "
+                "ON CONFLICT(profile) DO UPDATE SET session_id = excluded.session_id, at = excluded.at, "
+                "sha256 = excluded.sha256, content = excluded.content",
+                (profile, session_id, at if at is not None else time.time(), digest, content),
+            )
+        return digest
+
+    save_previous_paper_notes_snapshot = save_paper_notes_snapshot
+    save_profile_paper_notes = save_paper_notes_snapshot
+
+    def previous_paper_notes_snapshot(self, *, profile: str = "default") -> dict[str, Any] | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT session_id, at, sha256, content FROM paper_notes_profile WHERE profile = ?",
+                (profile,),
+            ).fetchone()
+        if row is None:
+            return None
+        return {
+            "session_id": row["session_id"],
+            "at": row["at"],
+            "sha256": row["sha256"],
+            "content": row["content"],
+        }
+
+    get_previous_paper_notes_snapshot = previous_paper_notes_snapshot
+    get_profile_paper_notes = previous_paper_notes_snapshot
+
+    def get_gamification(self, *, profile: str = "default") -> GamificationState:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT xp, level, streak_days, last_study_date FROM gamification WHERE profile = ?",
+                (profile,),
+            ).fetchone()
+        if row is None:
+            return GamificationState()
+        return GamificationState(
+            xp=row["xp"],
+            level=row["level"],
+            streak_days=row["streak_days"],
+            last_study_date=row["last_study_date"],
+        )
+
+    def save_gamification(self, state: GamificationState, *, profile: str = "default") -> None:
+        level = calculate_level(state.xp)
+        with self._connect() as connection:
+            connection.execute(
+                "INSERT INTO gamification "
+                "(profile, xp, level, streak_days, last_study_date, updated_at) VALUES (?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT(profile) DO UPDATE SET xp = excluded.xp, level = excluded.level, "
+                "streak_days = excluded.streak_days, last_study_date = excluded.last_study_date, "
+                "updated_at = excluded.updated_at",
+                (
+                    profile,
+                    max(0, int(state.xp)),
+                    level,
+                    max(0, int(state.streak_days)),
+                    state.last_study_date,
+                    time.time(),
+                ),
+            )
+
+    get_gamification_state = get_gamification
+    save_gamification_state = save_gamification
+
+    def award_session_xp(
+        self,
+        session_id: int,
+        xp: int,
+        *,
+        profile: str | None = None,
+        now: datetime | date | None = None,
+    ) -> GamificationState:
+        """Award XP once per session and roll the streak on UTC calendar days."""
+        award = max(0, int(xp))
+        if isinstance(now, datetime):
+            current_date = (now if now.tzinfo else now.replace(tzinfo=timezone.utc)).astimezone(timezone.utc).date()
+        elif isinstance(now, date):
+            current_date = now
+        else:
+            current_date = datetime.now(timezone.utc).date()
+
+        with self._connect() as connection:
+            session = connection.execute(
+                "SELECT profile FROM sessions WHERE id = ?", (session_id,)
+            ).fetchone()
+            if session is None:
+                raise SessionGone(f"session {session_id} no longer exists")
+            selected_profile = profile or str(session["profile"])
+            existing_award = connection.execute(
+                "SELECT 1 FROM session_xp WHERE session_id = ?", (session_id,)
+            ).fetchone()
+            row = connection.execute(
+                "SELECT xp, streak_days, last_study_date FROM gamification WHERE profile = ?",
+                (selected_profile,),
+            ).fetchone()
+            current_xp = int(row["xp"]) if row else 0
+            streak = int(row["streak_days"]) if row else 0
+            last_date = date.fromisoformat(row["last_study_date"]) if row and row["last_study_date"] else None
+
+            if existing_award is None:
+                current_xp += award
+                if last_date is None:
+                    streak = 1
+                elif current_date == last_date:
+                    pass
+                elif (current_date - last_date).days == 1:
+                    streak += 1
+                elif current_date > last_date:
+                    streak = 1
+                connection.execute(
+                    "INSERT INTO session_xp (session_id, profile, xp, awarded_at) VALUES (?, ?, ?, ?)",
+                    (session_id, selected_profile, award, time.time()),
+                )
+                last_date = current_date if last_date is None or current_date >= last_date else last_date
+                connection.execute(
+                    "INSERT INTO gamification "
+                    "(profile, xp, level, streak_days, last_study_date, updated_at) VALUES (?, ?, ?, ?, ?, ?) "
+                    "ON CONFLICT(profile) DO UPDATE SET xp = excluded.xp, level = excluded.level, "
+                    "streak_days = excluded.streak_days, last_study_date = excluded.last_study_date, "
+                    "updated_at = excluded.updated_at",
+                    (
+                        selected_profile,
+                        current_xp,
+                        calculate_level(current_xp),
+                        streak,
+                        last_date.isoformat() if last_date else None,
+                        time.time(),
+                    ),
+                )
+
+        return self.get_gamification(profile=selected_profile)
 
     # ── learner model ───────────────────────────────────────────────────────
 
@@ -452,6 +827,8 @@ class Store:
             connection.execute("DELETE FROM sessions WHERE profile = ?", (profile,))
             connection.execute("DELETE FROM learner WHERE profile = ?", (profile,))
             connection.execute("DELETE FROM rule_weights WHERE profile = ?", (profile,))
+            connection.execute("DELETE FROM gamification WHERE profile = ?", (profile,))
+            connection.execute("DELETE FROM paper_notes_profile WHERE profile = ?", (profile,))
 
         # VACUUM cannot run inside a transaction, and sqlite3 opens one implicitly
         # for the DELETEs above — so it gets its own autocommit connection. Worth

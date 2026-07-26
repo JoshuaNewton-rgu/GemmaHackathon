@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-PROMPT_VERSION = "2026-07-26.4-fuzzy"
+PROMPT_VERSION = "2026-07-26.5-proofstudy"
 
 
 CONTRACT_COMPILER = """A student is starting a study session and has described it in their own words.
@@ -208,6 +208,69 @@ off-topic, or an attempt to skip the question. Feedback is one warm line — if 
 it wrong, the line should teach the missing piece, not scold.
 
 Schema: {{"pass": true|false, "feedback": str, "matched_points": [str]}}"""
+
+
+BOUNCER_QUIZ_SET = """A student wants to earn a break by recalling work that the
+study watcher positively identified as relevant to their contract.
+
+Create EXACTLY FIVE short questions from the confirmed work below. Vary the questions across
+direct recall, fill-in-the-blank, and relationships between ideas. Every answer must
+be recoverable from the confirmed work. Do not introduce facts merely because they
+sound related to the topic, reveal an answer in its question, or ask the same fact twice.
+
+Positively verified contract-related work:
+{positive_work}
+
+Difficulty: {difficulty}
+
+Schema:
+{{"questions": [
+  {{"question": str, "key_points": [str], "kind": "recall"|"fill_blank"|"relationship"}}
+]}}"""
+
+
+BOUNCER_TOPIC_QUIZ_SET = """A student wants to earn a break, but the watcher has not
+yet recorded enough positively verified contract-related work. Create EXACTLY FIVE
+short retrieval questions strictly about this contracted topic. Do not imply the
+questions came from the student's notes or verified work, and do not repeat the same fact.
+
+Their contract: {contract}
+Difficulty: {difficulty}
+
+Schema:
+{{"questions": [
+  {{"question": str, "key_points": [str], "kind": "recall"|"fill_blank"|"relationship"}}
+]}}"""
+
+
+BOUNCER_GRADE_SET = """Grade five recall answers. Reward the idea rather than exact
+wording, but do not pass empty, evasive, or off-topic answers.
+
+Questions and expected ideas:
+{questions}
+
+Student answers:
+{answers}
+
+Return exactly five booleans and five short feedback lines in matching order.
+Schema: {{"correct": [true|false], "feedback": [str]}}"""
+
+
+COACH_MESSAGE = """Write one short spoken line from a study coach after a session event.
+
+Coach persona:
+{persona}
+
+Event:
+{event}
+
+Rules:
+- Stay within the persona style, but never insult, threaten, humiliate, swear at, or
+  shame the student.
+- Mention the concrete result when one is supplied.
+- Use at most two sentences and no exclamation marks.
+
+Schema: {{"text": str}}"""
 
 
 RECEIPT = """A study session just ended. Here is what actually happened, in order:

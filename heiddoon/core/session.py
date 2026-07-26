@@ -11,12 +11,30 @@ actually happened rather than a plausible story about it.
 from __future__ import annotations
 
 import time
+import uuid
 from pathlib import Path
 from typing import Any, Callable
 
 from ..config import Settings, settings as default_settings
 from ..providers import Provider
-from ..schemas import Contract, Diff, Event, Grade, PageRead, Quiz, Receipt, Verdict
+from ..personas import get_persona, safe_feedback_text
+from ..schemas import (
+    CoachFeedback,
+    Contract,
+    Diff,
+    Event,
+    GamificationState,
+    Grade,
+    PageRead,
+    ProgressScore,
+    Quiz,
+    QuizResult,
+    QuizSet,
+    Receipt,
+    StudyMetadata,
+    Verdict,
+)
+from ..study import compute_progress_score
 from ..store import Store
 from ..fuzzy import Rule, default_rules
 from . import (
@@ -35,6 +53,10 @@ Listener = Callable[[Event], None]
 #: colliding with a real file, the same trick `paper:` uses for photographed pages.
 SCREEN_WORK_PATH = "screen:work"
 
+#: The screen-work stream is deliberately positive-only: readable off-task material
+#: is neither progress evidence nor valid quiz material.
+POSITIVE_VERDICT_WORK_PATH = SCREEN_WORK_PATH
+
 #: Below this an excerpt is a window title or a stray line, not something to build a
 #: retrieval question from.
 MIN_WORK_WORDS = 15
@@ -52,6 +74,7 @@ class Session:
         settings: Settings | None = None,
         profile: str = "default",
         session_id: int | None = None,
+        study: StudyMetadata | None = None,
     ) -> None:
         self.provider = provider
         self.contract = contract
@@ -60,9 +83,23 @@ class Session:
         self.profile = profile
         self.started_at = time.time()
         self.id = session_id if session_id is not None else self.store.start_session(contract, profile=profile)
+        if study is not None:
+            self.study = study
+        elif session_id is not None:
+            self.study = self.store.get_study_metadata(session_id) or StudyMetadata(
+                subject=contract.task, planned_duration_min=45, persona_id=contract.tone
+            )
+        else:
+            self.study = StudyMetadata(
+                subject=contract.task, planned_duration_min=45, persona_id=contract.tone
+            )
+        self.store.save_study_metadata(self.id, self.study)
         self.learner = self.store.get_learner(profile=profile)
         self._listeners: list[Listener] = []
         self._pending_quiz: Quiz | None = None
+        self._pending_quiz_set: QuizSet | None = None
+        self._pending_quiz_id: str | None = None
+        self._pending_quiz_sets: dict[str, QuizSet] = {}
         self._last_artifact_check: dict[str, float] = {}
         self._last_notes_check: float | None = None
         self._last_progress_check: float | None = None
@@ -194,6 +231,18 @@ class Session:
     def elapsed_min(self) -> int:
         return int((time.time() - self.started_at) // 60)
 
+    @property
+    def planned_end_at(self) -> float:
+        return self.started_at + self.study.planned_duration_min * 60
+
+    @property
+    def remaining_s(self) -> int:
+        return max(0, int(self.planned_end_at - time.time()))
+
+    @property
+    def has_notes_proof(self) -> bool:
+        return self.store.latest_snapshot(self.id, notes_mod.PAPER_PATH) is not None
+
     def wants(self, signal: str) -> bool:
         return signal in self.contract.signals
 
@@ -250,6 +299,8 @@ class Session:
         """
         excerpt = result.work_text.strip()
         if len(excerpt.split()) < MIN_WORK_WORDS:
+            return
+        if not result.on_task:
             return
         baseline = self.store.first_snapshot(self.id, SCREEN_WORK_PATH)
         self.store.add_snapshot(self.id, SCREEN_WORK_PATH, excerpt)
@@ -411,6 +462,7 @@ class Session:
             # badly.
             return page, None
 
+        profile_baseline = self.store.previous_paper_notes_snapshot(profile=self.profile)
         baseline = self.store.latest_snapshot(self.id, notes_mod.PAPER_PATH)
         self.store.add_snapshot(self.id, notes_mod.PAPER_PATH, page.text)
 
@@ -423,26 +475,49 @@ class Session:
                     detail={"baseline": True, "words": diff_mod.count_words(page.text)},
                 )
             )
-            return page, None
-
-        minutes = max(1, int((time.time() - baseline["at"]) // 60))
-        result, _ = diff_mod.judge_delta(
-            self.provider, self.contract, baseline["content"], page.text, minutes=minutes
-        )
-        self._record(
-            Event(
-                kind="diff",
-                seen=page.page_note or "paper notes",
-                detail={
-                    "verdict": result.verdict,
-                    "delta_words": result.delta_words,
-                    "summary": result.summary,
-                    "quality_note": result.quality_note,
-                    "minutes": minutes,
-                    "source": "paper",
-                },
+            result = None
+        else:
+            minutes = max(1, int((time.time() - baseline["at"]) // 60))
+            result, _ = diff_mod.judge_delta(
+                self.provider, self.contract, baseline["content"], page.text, minutes=minutes
             )
+            self._record(
+                Event(
+                    kind="diff",
+                    seen=page.page_note or "paper notes",
+                    detail={
+                        "verdict": result.verdict,
+                        "delta_words": result.delta_words,
+                        "summary": result.summary,
+                        "quality_note": result.quality_note,
+                        "minutes": minutes,
+                        "source": "paper",
+                    },
+                )
+            )
+
+        previous_text = profile_baseline["content"] if profile_baseline else ""
+        proof_diff = result
+        if proof_diff is None and previous_text:
+            proof_diff, _ = diff_mod.judge_delta(
+                self.provider,
+                self.contract,
+                previous_text,
+                page.text,
+                minutes=max(1, self.elapsed_min),
+            )
+        verdict = proof_diff.verdict if proof_diff else ("progress" if len(page.text.split()) >= 12 else "stalled")
+        progress = compute_progress_score(
+            elapsed_min=(time.time() - self.started_at) / 60,
+            planned_duration_min=self.study.planned_duration_min,
+            previous_text=previous_text,
+            current_text=page.text,
+            diff_verdict=verdict,
+            substantive=proof_diff.substantive if proof_diff else bool(page.text.strip()),
+            word_growth=proof_diff.delta_words if proof_diff else len(page.text.split()),
         )
+        self.store.save_progress(self.id, progress)
+        self.store.save_paper_notes_snapshot(page.text, profile=self.profile, session_id=self.id)
         return page, result
 
     def should_ask_for_notes(self, *, every_min: int | None = None) -> bool:
@@ -559,6 +634,101 @@ class Session:
             self._pending_quiz = None
         return grade
 
+    def request_break_set(self) -> tuple[str, QuizSet]:
+        source = self._positive_verdict_work()
+        quiz, _ = bouncer.ask_quiz_set(
+            self.provider,
+            source or "",
+            contract=self.contract,
+            difficulty=self.learner.next_difficulty,
+        )
+        self._pending_quiz_set = quiz
+        self._pending_quiz_id = uuid.uuid4().hex
+        self._pending_quiz_sets[self._pending_quiz_id] = quiz
+        return self._pending_quiz_id, quiz
+
+    def _positive_verdict_work(self) -> str:
+        """Latest readable work from an on-task screen/camera verdict only."""
+        snapshot = self.store.latest_snapshot(self.id, POSITIVE_VERDICT_WORK_PATH)
+        return snapshot["content"] if snapshot else ""
+
+    def answer_break_set(self, quiz_id: str, answers: list[str]) -> tuple[QuizResult, int, CoachFeedback]:
+        quiz = self._pending_quiz_sets.get(quiz_id)
+        if quiz is None:
+            raise ValueError("ask for a new break quiz first")
+        result, _ = bouncer.grade_quiz_set(self.provider, quiz, answers)
+        correct_count = sum(result.correct)
+        break_minutes = 10 if correct_count >= 3 else 3
+        self.store.save_quiz_attempt(self.id, quiz, result)
+        self._record(
+            Event(
+                kind="quiz",
+                on_task=True,
+                seen=f"{correct_count}/5 recalled",
+                detail={
+                    "pass": correct_count >= 3,
+                    "correct_count": correct_count,
+                    "score": result.score,
+                    "break_minutes": break_minutes,
+                },
+            )
+        )
+        event = {
+            "type": "break_quiz",
+            "correct_count": correct_count,
+            "total": 5,
+            "break_minutes": break_minutes,
+            "outcome": "passed" if correct_count >= 3 else "review",
+        }
+        coach = self.coach_feedback(event)
+        self._pending_quiz_set = None
+        self._pending_quiz_id = None
+        self._pending_quiz_sets.pop(quiz_id, None)
+        return result, break_minutes, coach
+
+    def coach_feedback(self, event: dict[str, Any]) -> CoachFeedback:
+        persona = get_persona(self.study.persona_id)
+        if event.get("type") == "session_complete":
+            fallback = (
+                f"Progress score {event.get('progress_score', 0)}. "
+                f"You earned {event.get('xp_awarded', 0)} XP; come back tomorrow and protect the streak."
+            )
+        elif event.get("type") == "notes_proof":
+            fallback = (
+                f"That is visible work: {event.get('progress_score', 0)} out of 100. "
+                "Now prove you can recall it."
+            )
+        else:
+            fallback = (
+                f"{event.get('correct_count', 0)} out of {event.get('total', 5)}. "
+                + (
+                    "Break earned. Come back ready."
+                    if event.get("outcome") == "passed"
+                    else "Take three minutes, then review the missed ideas."
+                )
+            )
+        try:
+            from .. import prompts
+
+            raw, _ = self.provider.complete_json(
+                prompts.render(
+                    prompts.COACH_MESSAGE,
+                    persona={
+                        "name": persona.label,
+                        "style": persona.text_style,
+                    },
+                    event=event,
+                ),
+                max_tokens=180,
+            )
+            message = str(raw.get("text", raw.get("message", fallback)))
+        except Exception:  # noqa: BLE001 - feedback must degrade, never block a session
+            message = fallback
+        return CoachFeedback(
+            message=safe_feedback_text(message, persona),
+            persona_id=persona.id,
+        )
+
     def _artifact_text(self) -> str:
         """The most recent thing the student has written, whatever medium it is in.
 
@@ -599,6 +769,31 @@ class Session:
         self.store.save_learner(self.learner, profile=self.profile)
         self.store.end_session(self.id, result)
         return result
+
+    def finish_study(self) -> tuple[Receipt, ProgressScore, GamificationState, CoachFeedback]:
+        """Finish a proof-backed run and award its persistent rewards once."""
+        progress = self.store.latest_progress(self.id)
+        if progress is None or not self.has_notes_proof:
+            raise ValueError("upload a readable photo of your notes before finishing")
+        receipt = self.finish()
+        attempts = self.store.quiz_attempts(self.id)
+        quiz_score = attempts[-1]["result"].score if attempts else 0
+        xp_award = 20 + progress.score // 2 + quiz_score // 10
+        gamification = self.store.award_session_xp(
+            self.id,
+            xp_award,
+            profile=self.profile,
+        )
+        coach = self.coach_feedback(
+            {
+                "type": "session_complete",
+                "progress_score": progress.score,
+                "xp_awarded": xp_award,
+                "level": gamification.level,
+                "streak_days": gamification.streak_days,
+            }
+        )
+        return receipt, progress, gamification, coach
 
     # ── resume ──────────────────────────────────────────────────────────────
 

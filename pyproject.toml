@@ -18,7 +18,7 @@ dependencies = [
 watch = ["mss>=9.0", "opencv-python>=4.8", "plyer>=2.1"]
 # The web app.
 web = ["fastapi>=0.110", "uvicorn[standard]>=0.27", "python-multipart>=0.0.9"]
-dev = ["pytest>=8.0"]
+dev = ["pytest>=8.0", "httpx2>=2.9"]
 
 [project.scripts]
 heiddoon = "heiddoon.cli:main"

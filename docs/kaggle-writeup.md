@@ -57,7 +57,7 @@ Five signals feed one loop:
 - **Two front ends, one Session, one SQLite database.** The web app and the CLI watcher run simultaneously, with the UI streaming the watcher's verdicts over SSE.
 - **Autopilot watches server-side**, so it keeps working while the app is behind another window, which is the point: the interesting frames are the ones where the app isn't in front.
 - **One provider seam** (hosted API · Ollama · mock) decides where the weights run. Nothing above it knows the difference.
-- **152 tests. No network, no model, no GPU.** The loop is testable because the perception is behind a seam.
+- **168 tests. No network, no model, no GPU.** The loop is testable because the perception is behind a seam.
 
 ### The eval refuses to flatter us
 
