@@ -365,6 +365,11 @@ def api_start_session(request: StartRequest) -> dict[str, Any]:
     if not contract.task:
         raise HTTPException(status_code=400, detail="the contract needs a task")
     session = Session(_provider(), contract, store=_store, profile=request.profile)
+    # Baseline every contracted file now, exactly as the CLI watcher does. Without
+    # this the first diff of the session has nothing to compare against, so it
+    # silently becomes the baseline and reports no verdict — meaning the student's
+    # first twenty minutes of work produce no progress reading at all.
+    session.snapshot_artifacts()
     _attach_stream(session)
     _sessions[session.id] = session
     return {
