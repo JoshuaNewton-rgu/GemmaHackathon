@@ -103,6 +103,8 @@ class Session:
         self._last_artifact_check: dict[str, float] = {}
         self._last_notes_check: float | None = None
         self._last_progress_check: float | None = None
+        #: Words added since the session's first excerpt, updated every frame.
+        self._live_words: int = 0
         self._last_break_at: float | None = None
         self.rules: list[Rule] = self._load_rules()
         #: The most recent decision trace, for the xAI panel.
@@ -178,6 +180,7 @@ class Session:
                     "latency_s": round(outcome.latency_s, 2),
                     "read_work": bool(outcome.perception.work_text.strip()),
                     "work_source": outcome.perception.work_source,
+                    "live_words": self._live_words,
                 },
             )
         )
@@ -274,6 +277,7 @@ class Session:
                     # where the privacy screen accounts for it.
                     "read_work": bool(result.work_text.strip()),
                     "work_source": result.work_source,
+                    "live_words": self._live_words,
                 },
             )
         )
@@ -299,6 +303,14 @@ class Session:
             return
         baseline = self.store.first_snapshot(self.id, SCREEN_WORK_PATH)
         self.store.add_snapshot(self.id, SCREEN_WORK_PATH, excerpt)
+
+        # The live count is free — a word diff in Python, no model call — so it is
+        # computed on every frame and the panel can move as the student types. The
+        # *verdict* on that writing costs a call, so it stays throttled below. Cheap
+        # number now, expensive judgement occasionally.
+        self._live_words = diff_mod.net_word_delta(
+            baseline["content"] if baseline else "", excerpt
+        )
         self._maybe_judge_screen_progress(baseline, excerpt, result.work_source)
 
     def _maybe_judge_screen_progress(

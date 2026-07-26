@@ -30,6 +30,7 @@ from .config import settings
 from .core.contract import compile_contract
 from .autopilot import Autopilot
 from .core import notes as notes_mod
+from .core.expert import PROTECTED as _PROTECTED
 from .fuzzy import DECISIONS, PERCEPTS, validate
 from .core.session import Session
 from .personas import list_personas, resolve_persona_id
@@ -822,6 +823,9 @@ def api_rules(session_id: int | None = None, profile: str = "default") -> dict[s
         ],
         "problems": validate(rules),
         "tuned": sum(1 for rule in rules if rule.tuned),
+        # Named here so the UI can mark them locked before a student tries to move one,
+        # rather than letting them drag a slider and then explaining the refusal.
+        "protected": sorted(_PROTECTED),
     }
 
 

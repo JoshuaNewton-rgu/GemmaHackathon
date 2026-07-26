@@ -215,8 +215,11 @@
               <button data-cadence="5">Demo</button>
             </div>
             <p class="hint" style="margin-top:6px" id="pace-note"></p>
-            <details style="margin-top:12px">
-              <summary class="hint" style="cursor:pointer">Check something now</summary>
+            <div id="manual-capture" class="hidden" style="margin-top:14px;border-top:1px solid var(--divider);padding-top:14px">
+              <div class="eyebrow dim">Manual check</div>
+              <p class="hint" style="margin-top:4px">
+                This server cannot see a screen, so frames have to be handed to it.
+              </p>
               <div class="actions pair" style="margin-top:10px">
                 <button class="btn btn-tonal sm" id="btn-screenshot">
                   <svg class="ic sm"><use href="#i-screen"/></svg>My screen
@@ -233,7 +236,7 @@
                 <div style="margin-top:6px">…or drop an image</div>
               </div>
               <video id="webcam" class="hidden" autoplay playsinline muted></video>
-            </details>
+            </div>
           </div>
 
           <!-- The page request. A card, never a modal: it waits for a natural stop
@@ -301,26 +304,7 @@
               <span class="spacer"></span>
               <span class="hint mono" id="verdict-count"></span>
             </div>
-            <div class="feed" id="feed"><div class="feed-empty">Nothing yet. Judge a frame, or check your page below.</div></div>
-          </div>
-
-          <div class="card">
-            <div class="eyebrow">Did the work actually move</div>
-            <p class="body tight" style="margin-top:6px">The device-independent signal — it reads the page, not the screen.</p>
-            <div class="actions" style="margin-top:12px" id="artifact-actions"></div>
-            <div class="grid two" style="margin-top:14px">
-              <div>
-                <div class="field"><label for="diff-before">The page, earlier</label>
-                  <textarea id="diff-before" rows="6" placeholder="Paste how the page looked when you started."></textarea></div>
-              </div>
-              <div>
-                <div class="field"><label for="diff-after">The page, now</label>
-                  <textarea id="diff-after" rows="6" placeholder="Paste how it looks now."></textarea></div>
-              </div>
-            </div>
-            <div class="actions" style="margin-top:14px">
-              <button class="btn btn-filled sm" id="btn-diff">Judge my progress</button>
-            </div>
+            <div class="feed" id="feed"><div class="feed-empty">Nothing yet. It checks on its own — verdicts appear here as they happen.</div></div>
           </div>
 
           <div class="actions end" style="margin-top:16px">

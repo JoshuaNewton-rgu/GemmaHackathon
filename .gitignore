@@ -12,6 +12,11 @@ venv/
 heiddoon.db
 events.jsonl
 
+# The file the contract points at is the student's own working document. It changes
+# every session and belongs to them, not to the repo. testset/notes_v*.md are the
+# committed examples if you want something to diff against.
+notes_tokenising.md
+
 # Eval output is regenerated; the committed number lives in the writeup.
 eval_results.json
 eval_mock.json
