@@ -1,0 +1,21 @@
+{
+  "name": "proofstudy",
+  "private": true,
+  "description": "ProofStudy - a study companion that gates breaks and rewards behind photographed notes and AI-generated recall quizzes, coached by Gemma 4 powered voice personas.",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "concurrently -n backend,frontend -c blue,magenta \"npm:dev:backend\" \"npm:dev:frontend\"",
+    "dev:backend": "npm run dev --workspace backend",
+    "dev:frontend": "npm run start --workspace frontend",
+    "build:backend": "npm run build --workspace backend",
+    "test:gemma": "npm run test:gemma --workspace backend",
+    "infra:up": "docker compose -f infra/docker-compose.yml up -d",
+    "infra:down": "docker compose -f infra/docker-compose.yml down"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0"
+  }
+}

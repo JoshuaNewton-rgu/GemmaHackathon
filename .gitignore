@@ -8,5 +8,40 @@
 /dataSources.local.xml
 # Editor-based HTTP Client requests
 /httpRequests/
-#Env file
+
+# Env files
 .env
+.env.local
+*.env.local
+backend/.env
+frontend/.env
+
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build output
+dist/
+build/
+backend/dist/
+.expo/
+web-build/
+
+# Uploads (user note photos) - never commit user content
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Logs
+*.log
+npm-debug.log*
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/*
+!.idea/vcs.xml

@@ -1,0 +1,38 @@
+{
+  "expo": {
+    "name": "ProofStudy",
+    "slug": "proofstudy",
+    "scheme": "proofstudy",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "backgroundColor": "#14121F"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.proofstudy.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "ProofStudy needs your camera to photograph your handwritten notes as proof of study.",
+        "NSPhotoLibraryUsageDescription": "ProofStudy needs photo library access so you can upload a picture of your notes."
+      }
+    },
+    "android": {
+      "package": "com.proofstudy.app",
+      "permissions": ["CAMERA", "READ_MEDIA_IMAGES"]
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "ProofStudy needs photo library access so you can upload a picture of your notes.",
+          "cameraPermission": "ProofStudy needs your camera to photograph your handwritten notes as proof of study."
+        }
+      ]
+    ]
+  }
+}
