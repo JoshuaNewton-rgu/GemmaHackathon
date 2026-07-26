@@ -16,9 +16,15 @@ from typing import Any, Callable
 
 from ..config import Settings, settings as default_settings
 from ..providers import Provider
-from ..schemas import Contract, Diff, Event, Grade, Quiz, Receipt, Verdict
+from ..schemas import Contract, Diff, Event, Grade, PageRead, Quiz, Receipt, Verdict
 from ..store import Store
-from . import bouncer, diff as diff_mod, receipt as receipt_mod, verdict as verdict_mod
+from . import (
+    bouncer,
+    diff as diff_mod,
+    notes as notes_mod,
+    receipt as receipt_mod,
+    verdict as verdict_mod,
+)
 
 Listener = Callable[[Event], None]
 
@@ -47,6 +53,8 @@ class Session:
         self._listeners: list[Listener] = []
         self._pending_quiz: Quiz | None = None
         self._last_artifact_check: dict[str, float] = {}
+        self._last_notes_check: float | None = None
+        self._on_break = False
 
     # ── plumbing ────────────────────────────────────────────────────────────
 
@@ -175,6 +183,100 @@ class Session:
             )
         )
         return result
+
+    # ── handwritten notes ───────────────────────────────────────────────────
+
+    def check_notes_photo(self, image: Any) -> tuple[PageRead, Diff | None]:
+        """Read a photo of a paper page and judge it as a delta.
+
+        Returns the transcription and, if there is a previous page to compare with,
+        the diff. The first photo of a session establishes the baseline and is not
+        a judgment — nobody should be told their notes are "stalled" because we have
+        only seen them once.
+        """
+        page, _ = notes_mod.transcribe_page(self.provider, self.contract, image)
+        self._last_notes_check = time.time()
+
+        if notes_mod.unreadable_reason(page) is not None:
+            # An unusable photo is not an event. It says nothing about their work,
+            # and logging it would drag the focus score down for holding a camera
+            # badly.
+            return page, None
+
+        baseline = self.store.latest_snapshot(self.id, notes_mod.PAPER_PATH)
+        self.store.add_snapshot(self.id, notes_mod.PAPER_PATH, page.text)
+
+        if baseline is None:
+            self._record(
+                Event(
+                    kind="notes",
+                    on_task=True,
+                    seen=page.page_note or "a page of notes",
+                    detail={"baseline": True, "words": diff_mod.count_words(page.text)},
+                )
+            )
+            return page, None
+
+        minutes = max(1, int((time.time() - baseline["at"]) // 60))
+        result, _ = diff_mod.judge_delta(
+            self.provider, self.contract, baseline["content"], page.text, minutes=minutes
+        )
+        self._record(
+            Event(
+                kind="diff",
+                seen=page.page_note or "paper notes",
+                detail={
+                    "verdict": result.verdict,
+                    "delta_words": result.delta_words,
+                    "summary": result.summary,
+                    "quality_note": result.quality_note,
+                    "minutes": minutes,
+                    "source": "paper",
+                },
+            )
+        )
+        return page, result
+
+    def should_ask_for_notes(self, *, every_min: int | None = None) -> bool:
+        """Whether it is fair to interrupt and ask for a photo of the page.
+
+        The whole intrusion policy lives here, because the camera is the only signal
+        that costs the student something every time it fires. Four conditions, all
+        of which must hold:
+
+        - asking is switched on at all;
+        - enough time has passed since the last photo, or since the session began;
+        - the screen has not already proved they are working — a tracked file that
+          moved, or a page photo, is evidence, and evidence means no question;
+        - they are not currently on a break.
+
+        The third condition is the important one. A student typing into their
+        contracted file should never be asked to show anything, because the diff has
+        already answered it.
+        """
+        interval = self.settings.notes_prompt_every_min if every_min is None else every_min
+        if interval <= 0:
+            return False
+        if self._on_break:
+            return False
+
+        since = time.time() - (self._last_notes_check or self.started_at)
+        if since < interval * 60:
+            return False
+
+        # Any progress evidence inside the window means we are not blind, so we keep
+        # quiet. Padding and stalled do not count as evidence — those are exactly
+        # the cases where a look at the page is worth the interruption.
+        window_start = time.time() - interval * 60
+        for event in self.events:
+            if event.kind == "diff" and event.at >= window_start:
+                if event.detail.get("verdict") == "progress":
+                    return False
+        return True
+
+    def note_break(self, on_break: bool) -> None:
+        """Breaks suspend the ask — an earned break should be undisturbed."""
+        self._on_break = on_break
 
     def judge_text_delta(self, before: str, after: str, *, minutes: int = 20) -> Diff:
         """Judge a delta supplied directly — how the web UI's diff tab works."""

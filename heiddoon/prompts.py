@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-PROMPT_VERSION = "2026-07-26.1"
+PROMPT_VERSION = "2026-07-26.2"
 
 
 CONTRACT_COMPILER = """A student is starting a study session and has described it in their own words.
@@ -95,6 +95,24 @@ Schema:
 
 --- AFTER ---
 {after}"""
+
+
+PAGE_READ = """A photo of a student's handwritten notes or worked problems.
+Their contract: {contract}
+
+Transcribe what is on the page as plain text, in the order it appears. Keep their own
+wording, their symbols and their equations. Mark anything you genuinely cannot read as
+[illegible] rather than guessing — a wrong transcription becomes a wrong judgment about
+their progress later.
+
+Do not mark, correct, improve or comment on the work. You are reading the page, not
+grading it.
+
+Schema:
+{{"text": str,                    // the transcription; "" if nothing legible
+  "legible": true|false,          // false if too blurry, dark or far away to read
+  "page_note": str,               // one short line: what this page is
+  "looks_like_notes": true|false}} // false if this is not a page of study notes at all"""
 
 
 BOUNCER_QUESTION = """A student wants a break. Before they get it, they answer one question

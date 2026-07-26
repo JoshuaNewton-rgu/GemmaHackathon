@@ -8,6 +8,7 @@ broken or absent in the version this replaced.
 from __future__ import annotations
 
 import json
+import time
 
 import pytest
 
@@ -482,6 +483,230 @@ class TestArtifactWatcher:
         watcher = ArtifactWatcher([str(tmp_path / "nope.md")])
         assert watcher.poll() == []
         assert len(watcher.missing()) == 1
+
+
+# ── the intrusion policy ────────────────────────────────────────────────────
+
+
+PAPER_CONTRACT = Contract(
+    task="thermodynamics chapter 4 (entropy)",
+    why="exam on Friday",
+    artifacts=["notes.md"],
+    signals=["screen", "camera", "diff"],
+)
+
+
+class TestShouldAskForNotes:
+    """The camera is the only signal that costs the student something every time.
+
+    So the rule is: never spend an interruption on something we already know. These
+    pin that down, because it is the difference between a study companion and a
+    tool that pesters you.
+    """
+
+    @pytest.fixture
+    def paper_session(self, store, tmp_path):
+        settings = Settings(db_path=tmp_path / "test.db", notes_prompt_every_min=25)
+        return Session(MockProvider(), PAPER_CONTRACT, store=store, settings=settings)
+
+    def test_not_asked_before_the_interval_has_passed(self, paper_session):
+        assert paper_session.should_ask_for_notes() is False
+
+    def test_asked_once_the_interval_has_passed(self, paper_session):
+        paper_session.started_at = time.time() - 26 * 60
+        assert paper_session.should_ask_for_notes() is True
+
+    def test_never_asked_when_switched_off(self, paper_session):
+        paper_session.started_at = time.time() - 60 * 60
+        assert paper_session.should_ask_for_notes(every_min=0) is False
+
+    def test_not_asked_when_the_file_already_proved_progress(self, paper_session):
+        """The whole point: typing into a tracked file means no question."""
+        paper_session.started_at = time.time() - 26 * 60
+        paper_session._record(
+            Event(kind="diff", seen="notes.md", detail={"verdict": "progress", "delta_words": 120})
+        )
+        assert paper_session.should_ask_for_notes() is False
+
+    def test_still_asked_when_the_file_only_showed_padding(self, paper_session):
+        # Padding is not evidence of work — this is exactly when a look at the page
+        # earns its interruption.
+        paper_session.started_at = time.time() - 26 * 60
+        paper_session._record(Event(kind="diff", seen="notes.md", detail={"verdict": "padding"}))
+        assert paper_session.should_ask_for_notes() is True
+
+    def test_still_asked_when_the_file_is_stalled(self, paper_session):
+        paper_session.started_at = time.time() - 26 * 60
+        paper_session._record(Event(kind="diff", seen="notes.md", detail={"verdict": "stalled"}))
+        assert paper_session.should_ask_for_notes() is True
+
+    def test_never_asked_during_a_break(self, paper_session):
+        paper_session.started_at = time.time() - 26 * 60
+        paper_session.note_break(True)
+        assert paper_session.should_ask_for_notes() is False
+        paper_session.note_break(False)
+        assert paper_session.should_ask_for_notes() is True
+
+    def test_a_photo_resets_the_clock(self, paper_session):
+        paper_session.started_at = time.time() - 26 * 60
+        assert paper_session.should_ask_for_notes() is True
+        paper_session._last_notes_check = time.time()
+        assert paper_session.should_ask_for_notes() is False
+
+
+class TestPaperNotes:
+    def test_an_unreadable_photo_records_nothing(self, session, monkeypatch):
+        """Holding a camera badly says nothing about whether they are working."""
+        from heiddoon.core import notes as notes_mod
+        from heiddoon.schemas import PageRead
+
+        monkeypatch.setattr(
+            notes_mod,
+            "transcribe_page",
+            lambda *a, **k: (PageRead(text="", legible=False), None),
+        )
+        page, diff = session.check_notes_photo(object())
+        assert diff is None
+        assert session.events == []  # nothing logged, focus score untouched
+
+    def test_first_page_is_a_baseline_not_a_judgment(self, session, monkeypatch):
+        from heiddoon.core import notes as notes_mod
+        from heiddoon.schemas import PageRead
+
+        monkeypatch.setattr(
+            notes_mod,
+            "transcribe_page",
+            lambda *a, **k: (PageRead(text="entropy is a state function", legible=True), None),
+        )
+        page, diff = session.check_notes_photo(object())
+        assert diff is None
+        assert [event.kind for event in session.events] == ["notes"]
+        assert session.events[0].detail["baseline"] is True
+
+    def test_second_page_is_diffed_against_the_first(self, session, monkeypatch):
+        from heiddoon.core import notes as notes_mod
+        from heiddoon.schemas import PageRead
+
+        pages = iter([
+            "entropy is a state function",
+            "entropy is a state function " + " ".join(f"w{n}" for n in range(40)),
+        ])
+        monkeypatch.setattr(
+            notes_mod,
+            "transcribe_page",
+            lambda *a, **k: (PageRead(text=next(pages), legible=True), None),
+        )
+        session.check_notes_photo(object())
+        page, diff = session.check_notes_photo(object())
+
+        assert diff is not None
+        assert diff.delta_words == 40  # counted from the transcriptions, not guessed
+        diff_events = [event for event in session.events if event.kind == "diff"]
+        assert diff_events[0].detail["source"] == "paper"
+
+    def test_transcription_is_stored_under_a_pseudo_path(self, session, monkeypatch):
+        """So a page can never collide with a real file on disk."""
+        from heiddoon.core import notes as notes_mod
+        from heiddoon.schemas import PageRead
+
+        monkeypatch.setattr(
+            notes_mod, "transcribe_page", lambda *a, **k: (PageRead(text="on paper", legible=True), None)
+        )
+        session.check_notes_photo(object())
+        assert notes_mod.PAPER_PATH.startswith("paper:")
+        assert session.store.latest_snapshot(session.id, notes_mod.PAPER_PATH)["content"] == "on paper"
+
+    def test_illegible_flag_is_forced_false_when_there_is_no_text(self):
+        from heiddoon.schemas import PageRead
+
+        assert PageRead.from_model({"text": "", "legible": True}).legible is False
+
+
+# ── the automatic loop ──────────────────────────────────────────────────────
+
+
+class TestAutopilot:
+    """An unchanged screen must not cost a model call.
+
+    This is the difference between an affordable always-on watcher and one that
+    spends a vision call every cadence to rediscover that the student is still on
+    the same page of the same PDF.
+    """
+
+    def test_an_unchanged_screen_is_skipped_without_a_model_call(self, store, tmp_path, monkeypatch):
+        import asyncio
+
+        from PIL import Image
+
+        from heiddoon.autopilot import Autopilot
+        from heiddoon.watchers import screen as screen_mod
+
+        still = Image.new("RGB", (200, 120), (240, 240, 240))
+        monkeypatch.setattr(screen_mod, "available", lambda: True)
+        monkeypatch.setattr(screen_mod, "capture", lambda *a, **k: still.copy())
+
+        provider = MockProvider()
+        settings = Settings(db_path=tmp_path / "test.db", notes_prompt_every_min=0)
+        session = Session(provider, CONTRACT, store=store, settings=settings)
+
+        async def run() -> None:
+            autopilot = Autopilot(settings)
+            await autopilot.start(session, cadence_s=1)
+            await asyncio.sleep(3.4)
+            await autopilot.stop(session.id)
+            state = autopilot.state(session.id)
+            # The first tick has nothing to compare against and is judged; every
+            # tick after it sees the same screen and is skipped.
+            assert state.checks == 1, f"expected one judged frame, got {state.checks}"
+            assert state.skipped >= 1, "an unchanged screen was re-judged"
+
+        asyncio.run(run())
+        # One verdict call for the first frame, and nothing after it.
+        assert len([call for call in provider.calls if "frame_kind" in call]) == 1
+        assert len([event for event in session.events if event.kind == "screen"]) == 1
+
+    def test_skips_are_not_logged_as_events(self, store, tmp_path, monkeypatch):
+        """A log full of "unchanged" would bury the events that mean something."""
+        import asyncio
+
+        from PIL import Image
+
+        from heiddoon.autopilot import Autopilot
+        from heiddoon.watchers import screen as screen_mod
+
+        still = Image.new("RGB", (200, 120), (10, 10, 10))
+        monkeypatch.setattr(screen_mod, "available", lambda: True)
+        monkeypatch.setattr(screen_mod, "capture", lambda *a, **k: still.copy())
+
+        settings = Settings(db_path=tmp_path / "test.db", notes_prompt_every_min=0)
+        session = Session(MockProvider(), CONTRACT, store=store, settings=settings)
+
+        async def run() -> None:
+            autopilot = Autopilot(settings)
+            await autopilot.start(session, cadence_s=1)
+            await asyncio.sleep(2.4)
+            await autopilot.stop(session.id)
+
+        asyncio.run(run())
+        assert not [event for event in session.events if event.kind == "skip"]
+
+    def test_start_reports_when_capture_is_unavailable(self, store, tmp_path, monkeypatch):
+        import asyncio
+
+        from heiddoon.autopilot import Autopilot
+        from heiddoon.watchers import screen as screen_mod
+
+        monkeypatch.setattr(screen_mod, "available", lambda: False)
+        settings = Settings(db_path=tmp_path / "test.db")
+        session = Session(MockProvider(), CONTRACT, store=store, settings=settings)
+
+        async def run() -> None:
+            autopilot = Autopilot(settings)
+            state = await autopilot.start(session)
+            assert state.running is False
+            assert "mss" in state.last_error
+
+        asyncio.run(run())
 
 
 # ── screen capture ──────────────────────────────────────────────────────────

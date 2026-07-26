@@ -17,10 +17,16 @@ on-task for *you*, and which file you're working in. Then four signals feed one 
 
 | Signal | Answers | Cost |
 |---|---|---|
-| **Screen** | What are you looking at, and does it mean what your contract allows? | one vision call |
+| **Screen** | What are you looking at, and does it mean what your contract allows? | one vision call — **skipped entirely when the screen has not changed** |
 | **Camera** | Are you here, and is there a phone in your hand? | one vision call |
-| **Artifact** | Did the work actually move? | one text call |
+| **Artifact** | Did the work actually move? | one text call, only when the file changed |
+| **Page** | What is on your paper notes, and has it grown? | one vision call, at most once per interval |
 | **Idle** | Are you at the machine at all? | free — no model |
+
+The screen signal runs **automatically** once a session starts. You do not press
+anything to be watched, and it runs server-side so it keeps working while the app is
+behind another window — which is the whole point, since the interesting frames are the
+ones where the app is not in front.
 
 Verdicts are **semantic**, not a blocklist: a lecture about your topic passes, entertainment on
 the same site doesn't; the right module's PDF passes, the wrong module's doesn't. That distinction
@@ -44,6 +50,26 @@ pattern and its trigger without shame, and an updated learner model that shapes 
    trust than a missed drift.
 3. **Truth** — word counts are computed in Python, not guessed by the model. A "progress" verdict
    on a file that shrank is overridden. The eval refuses to report a number it can't stand behind.
+
+## Handwriting, and not being a pest
+
+The work-diff was device-independent but not *medium*-independent: it could only see a
+file, so a student working on paper produced an empty diff and looked identical to a
+student doing nothing. Now a photo of the page is transcribed and the **transcriptions**
+are diffed — so progress/padding/stalled, the receipt and the learner model all work on
+handwriting with no special cases.
+
+The camera is the only signal that costs you something every time it fires, so it is
+governed by one rule: **never spend an interruption on something we already know.**
+
+- If a tracked file moved, you are not asked. The diff already answered it.
+- The ask fires at most once per interval, and only when nothing has proved you are
+  working — which is exactly the handwriting case.
+- It is a card, never a modal. "Not now" is respected, resets the timer, and is not
+  recorded. Being asked is not a mark against you, and neither is ignoring it.
+- During an earned break, nothing is asked at all.
+- An unreadable photo is not logged as an event — holding a camera badly says nothing
+  about whether you are working.
 
 ## Privacy
 
@@ -127,7 +153,9 @@ Everything is environment-driven; see [`.env.example`](.env.example).
 | `HEIDDOON_MODEL` | per provider | run `doctor` to see valid handles |
 | `GEMMA_API_KEY` | — | for the hosted backends |
 | `HEIDDOON_OLLAMA_MODEL` | `gemma4:12b` | |
-| `HEIDDOON_CADENCE_S` | `20` | seconds between check-ins |
+| `HEIDDOON_CADENCE_S` | `20` | seconds between CLI watcher check-ins |
+| `HEIDDOON_AUTO_CADENCE_S` | `60` | seconds between automatic checks in the web app |
+| `HEIDDOON_NOTES_PROMPT_EVERY_MIN` | `25` | minutes between page prompts; `0` disables |
 | `HEIDDOON_DB` | `./heiddoon.db` | |
 
 ## Layout

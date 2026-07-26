@@ -47,6 +47,14 @@ class Settings:
     cadence_s: int = 20
     #: How long a file must be unchanged before we judge the delta.
     artifact_settle_s: int = 5
+    #: Seconds between automatic screen checks in the web app. Longer than the CLI
+    #: watcher's cadence by default: every check that finds a changed screen is a
+    #: vision call, and an hour at 20s is 180 of them. Unchanged screens are free.
+    auto_cadence_s: int = 60
+    #: Minutes between "show me your page" prompts. 0 switches them off entirely.
+    #: Only ever fires when nothing else has proved the student is working — see
+    #: Session.should_ask_for_notes.
+    notes_prompt_every_min: int = 25
     db_path: Path = PROJECT_ROOT / "heiddoon.db"
     timeout_s: float = 180.0
 
@@ -64,6 +72,8 @@ class Settings:
             ollama_model=env.get("HEIDDOON_OLLAMA_MODEL", "gemma4:12b").strip(),
             cadence_s=int(env.get("HEIDDOON_CADENCE_S", "20")),
             artifact_settle_s=int(env.get("HEIDDOON_ARTIFACT_SETTLE_S", "5")),
+            auto_cadence_s=int(env.get("HEIDDOON_AUTO_CADENCE_S", "60")),
+            notes_prompt_every_min=int(env.get("HEIDDOON_NOTES_PROMPT_EVERY_MIN", "25")),
             db_path=Path(env.get("HEIDDOON_DB", str(PROJECT_ROOT / "heiddoon.db"))),
             timeout_s=float(env.get("HEIDDOON_TIMEOUT_S", "180")),
         )
