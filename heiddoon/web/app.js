@@ -21,6 +21,7 @@ const state = {
   autoCadence: 60,
   pageCamStream: null,
   manualBusy: false,
+  liveWords: 0,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -128,6 +129,7 @@ function show(name) {
   if (name !== "watch") stopAllCameras();
   if (name === "history") loadHistory();
   if (name === "privacy") loadPrivacy();
+  if (name === "reasoning") loadReasoning();
 }
 document.querySelectorAll(".rail-btn").forEach((node) =>
   node.addEventListener("click", () => show(node.dataset.screen)));
@@ -152,6 +154,9 @@ async function loadStatus() {
     try { saved = Number(localStorage.getItem("heiddoon.cadence")) || null; } catch { /* private mode */ }
     state.autoCadence = saved || status.auto_cadence_s || 60;
     paintPace();
+    // Shown only when the server has no screen of its own — otherwise the whole
+    // point is that nobody has to press anything.
+    $("manual-capture").classList.toggle("hidden", state.serverCapture);
     $("capture-hint").textContent = state.serverCapture
       ? "Grabs this machine's screen as it is right now, judges it, and drops it. No dialog, nothing stored."
       : "Asks which window or screen to share, grabs one frame, and stops. Nothing keeps watching.";
@@ -339,7 +344,6 @@ $("btn-start").addEventListener("click", async (event) => {
     state.events = [];
     $("nav-watch").disabled = false;
     $("nav-receipt").disabled = false;
-    renderArtifactButton(data.contract.artifacts || []);
     subscribe(data.session_id);
     startClock();
     show("watch");
@@ -379,6 +383,13 @@ function subscribe(sessionId) {
     addFeedRow(event);
     paintProgress(event);
     $("verdict-count").textContent = `${state.events.length} recorded`;
+    // Keep the trace current while someone is watching it. Only refetch when the
+    // panel is actually on screen — the arithmetic behind a verdict nobody is
+    // looking at can wait until they open the tab.
+    if ((event.kind === "screen" || event.kind === "camera")
+        && $("scr-reasoning").classList.contains("active")) {
+      refreshTrace({ at: event.at });
+    }
   };
 }
 
@@ -437,21 +448,33 @@ function addFeedRow(event) {
 function paintProgress(event) {
   const detail = event.detail || {};
 
+  // The live count arrives on every frame because counting words is free — a diff in
+  // Python, no model call. The verdict on those words costs a call and is throttled,
+  // so the number moves as you type and the judgement catches up.
+  if (detail.live_words !== undefined && detail.live_words !== null) {
+    state.liveWords = detail.live_words;
+    $("progress-words").textContent = detail.live_words >= 0 ? `+${detail.live_words}` : String(detail.live_words);
+    $("progress-words-label").textContent = "words added this session";
+  }
+
   if (detail.read_work) {
     $("progress-source").textContent = detail.work_source || "read from your screen";
     if (!state.events.some((e) => e.kind === "diff")) {
       $("progress-note").textContent =
-        "Read what you are writing. A progress check follows once there is enough new material.";
+        "Reading what you write. A judgement on it follows once there is enough new material.";
     }
   }
 
   if (event.kind !== "diff") return;
 
-  const diffs = state.events.filter((e) => e.kind === "diff");
-  const words = diffs.reduce((total, e) => total + (e.detail.delta_words || 0), 0);
-  $("progress-words").textContent = words >= 0 ? `+${words}` : String(words);
-  $("progress-words-label").textContent =
-    detail.source === "paper" ? "words added, from your page" : "words added this session";
+  // A paper page is its own count; screen work already has a live number.
+  if (detail.source === "paper") {
+    const words = state.events
+      .filter((e) => e.kind === "diff" && e.detail.source === "paper")
+      .reduce((total, e) => total + (e.detail.delta_words || 0), 0);
+    $("progress-words").textContent = words >= 0 ? `+${words}` : String(words);
+    $("progress-words-label").textContent = "words added, from your page";
+  }
 
   const chip = $("progress-verdict");
   chip.textContent = detail.verdict || "checked";
@@ -783,43 +806,6 @@ async function readPage(blob, button) {
 
 /* ── work-diff ──────────────────────────────────────────────────────────── */
 
-function renderArtifactButton(artifacts) {
-  const host = $("artifact-actions");
-  host.innerHTML = "";
-  if (!artifacts.length) {
-    host.appendChild(el("span", "hint", "This contract names no file — paste two versions below instead."));
-    return;
-  }
-  const button = el("button", "btn btn-tonal sm", `Check ${artifacts.join(", ")} on disk`);
-  button.addEventListener("click", async () => {
-    const done = withBusy(button, "reading your file");
-    try {
-      const { diffs } = await api(`/api/session/${state.sessionId}/artifact-check`, { method: "POST" });
-      const baselined = Object.entries(diffs).filter(([, value]) => value === null).map(([key]) => key);
-      if (baselined.length) snack(`Baseline recorded for ${baselined.join(", ")} — check again after writing.`);
-    } catch (error) {
-      snack(`Could not check the file: ${error.message}`, true);
-    } finally { done(); }
-  });
-  host.appendChild(button);
-}
-
-$("btn-diff").addEventListener("click", async (event) => {
-  const before = $("diff-before").value;
-  const after = $("diff-after").value;
-  if (!before.trim() && !after.trim()) { snack("Paste two versions of your page.", true); return; }
-  const done = withBusy(event.target, "reading your work");
-  try {
-    await api(`/api/session/${state.sessionId}/diff`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ before, after, minutes: 20 }),
-    });
-  } catch (error) {
-    snack(`Could not judge that delta: ${error.message}`, true);
-  } finally { done(); }
-});
-
 /* ── nudge, bouncer, break (3b) ─────────────────────────────────────────── */
 
 async function playNudgeSpeech(text) {
@@ -874,11 +860,10 @@ async function askForBreak() {
   $("bouncer-answer").value = "";
   $("ov-bouncer").classList.add("open");
   try {
-    const notes = $("diff-after").value.trim() || null;
     const { question, source } = await api(`/api/session/${state.sessionId}/break`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ notes }),
+      body: JSON.stringify({ notes: null }),
     });
     $("bouncer-question").textContent = question;
     $("bouncer-source").textContent = `from ${source || "your own notes"}`;
@@ -1181,6 +1166,302 @@ $("btn-delete").addEventListener("click", async (event) => {
     snack(error.message, true);
   } finally { done(); }
 });
+
+/* ── reasoning · the interpretable layer (3e) ────────────────────────────────
+
+   This screen is the whole XAI claim made checkable, so it renders the trace the
+   server sends and nothing else. There is no presentation logic here that could
+   flatter the decision: the sentence shown is the engine's own `why`, the strengths
+   are the firing strengths that actually aggregated, and rules that did not fire are
+   still listed — a system that only shows the rules supporting its conclusion is not
+   interpretable, it is persuasive. */
+
+// Which degrees the model perceived, versus which the session measured from its own
+// event log. The panel's legend promises this split and it is the core of the claim:
+// a measured number cannot be a model's opinion about what should happen to you.
+const PERCEIVED = new Set(["topic_match", "is_own_work", "padding", "confidence"]);
+
+const reasoning = { rules: [], locked: new Set(), loaded: false };
+
+function perceptRow(name, value, memberships) {
+  const row = el("div", "percept");
+  row.appendChild(el("span", "nm", name));
+
+  const track = el("span", "track");
+  const fill = el("span", `fill${PERCEIVED.has(name) ? "" : " measured"}`);
+  fill.style.width = `${Math.round(Math.max(0, Math.min(1, value)) * 100)}%`;
+  track.appendChild(fill);
+  row.appendChild(track);
+
+  row.appendChild(el("span", "val", value.toFixed(2)));
+
+  // The words the number belongs to, and to what degree. This is the part a
+  // threshold-based system cannot show, because it has already thrown it away.
+  const words = memberships || {};
+  const present = Object.entries(words).filter(([, degree]) => degree > 0);
+  if (present.length) {
+    const strongest = present.reduce((best, item) => (item[1] > best[1] ? item : best))[0];
+    const holder = el("span", "words");
+    present
+      .sort((left, right) => right[1] - left[1])
+      .forEach(([word, degree]) => {
+        const chip = el("span", "word");
+        const label = el(word === strongest ? "b" : "span", null, word);
+        chip.appendChild(label);
+        chip.appendChild(el("span", null, ` ${Math.round(degree * 100)}%`));
+        holder.appendChild(chip);
+      });
+    row.appendChild(holder);
+  }
+  return row;
+}
+
+function firedRuleCard(fired, isTop) {
+  const card = el("div", `rulecard${isTop ? " top" : ""}`);
+  const head = el("div", "head");
+  head.appendChild(el("span", "txt", fired.text));
+  head.appendChild(el("span", "str", `${Math.round(fired.strength * 100)}%`));
+  card.appendChild(head);
+
+  const clauses = el("div", "clauses");
+  (fired.clauses || []).forEach((clause) =>
+    clauses.appendChild(el("span", "cl", `${clause.text} · ${Math.round(clause.degree * 100)}%`)));
+  card.appendChild(clauses);
+
+  if (fired.because) card.appendChild(el("div", "why", fired.because));
+  return card;
+}
+
+function renderTrace(trace, at, outcome) {
+  $("trace-when").textContent = at
+    ? new Date(at * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+    : "last decision";
+
+  const line = $("trace-verdict");
+  line.textContent = trace.why || "Nothing was concluded.";
+
+  if (outcome) {
+    // What the rules concluded is not always what the student heard. A conclusion too
+    // weak to act on is the threshold doing its job, and it is worth showing: it is
+    // the difference between this and a system that nudges on any excuse.
+    if (outcome.act && outcome.nudge) {
+      line.appendChild(el("div", "why", `It said: “${outcome.nudge}”`));
+    } else if (outcome.firmness && outcome.firmness !== "silent") {
+      line.appendChild(el("div", "why",
+        `Concluded ${outcome.firmness}, but not strongly enough to interrupt you — so it said nothing.`));
+    }
+  }
+
+  const chips = el("div", "chips");
+  chips.style.marginTop = "10px";
+  Object.entries(trace.output_words || {}).forEach(([variable, word]) => {
+    const strength = (trace.activation || {})[variable];
+    const chip = el(
+      "span",
+      `chip ${word === "silent" || word === "none" || word === "no" ? "neutral" : "info"}`,
+      `${variable}: ${word}${strength === undefined ? "" : ` · asked ${Math.round(strength * 100)}%`}`,
+    );
+    chips.appendChild(chip);
+  });
+  if (chips.childElementCount) line.appendChild(chips);
+
+  const percepts = $("trace-percepts");
+  percepts.textContent = "";
+  const inputs = trace.inputs || {};
+  // Perceived first, then measured, so the panel reads in the order the pipeline runs.
+  const order = Object.keys(inputs).sort(
+    (left, right) => (PERCEIVED.has(right) ? 1 : 0) - (PERCEIVED.has(left) ? 1 : 0));
+  order.forEach((name) =>
+    percepts.appendChild(perceptRow(name, inputs[name], (trace.memberships || {})[name])));
+
+  const rules = $("trace-rules");
+  rules.textContent = "";
+  const fired = (trace.fired || []).slice().sort((left, right) => right.strength - left.strength);
+  if (!fired.length) {
+    rules.appendChild(el("p", "hint", "No rule fired, so nothing happened. Silence is the default."));
+  } else {
+    fired.forEach((item, index) => rules.appendChild(firedRuleCard(item, index === 0)));
+  }
+
+  const quiet = (trace.silent || []).length;
+  $("trace-silent").textContent = quiet
+    ? `${quiet} other rule${quiet === 1 ? "" : "s"} were considered and did not fire.`
+    : "";
+}
+
+async function refreshTrace({ at = null, quiet = true } = {}) {
+  if (!state.sessionId) return;
+  try {
+    // Two shapes reach this function: the trace endpoint returns the whole outcome
+    // with the decision nested under `trace`, while a frame response returns the
+    // decision on its own. Unwrap rather than making the caller know which it has.
+    const payload = await api(`/api/session/${state.sessionId}/trace`);
+    const decision = payload.trace || payload;
+    renderTrace(decision, at, payload.trace ? payload : null);
+  } catch (error) {
+    // A 404 means nothing has been judged yet, which is not a failure worth a snackbar.
+    if (!quiet) snack(error.message, true);
+  }
+}
+
+function ruleCard(rule) {
+  const card = el("div", "rulecard");
+  const head = el("div", "head");
+  head.appendChild(el("span", "txt", rule.text));
+  if (reasoning.locked.has(rule.id)) head.appendChild(el("span", "badge locked", "locked"));
+  else if (rule.tuned) head.appendChild(el("span", "badge tuned", "tuned for you"));
+  card.appendChild(head);
+
+  if (rule.because) card.appendChild(el("div", "why", rule.because));
+
+  const control = el("div", "ctl");
+  const slider = document.createElement("input");
+  slider.type = "range";
+  slider.min = "0";
+  slider.max = "1.5";
+  slider.step = "0.05";
+  slider.value = String(rule.weight);
+  slider.setAttribute("aria-label", `weight for ${rule.text}`);
+  const readout = el("span", "wt", rule.weight.toFixed(2));
+
+  const locked = reasoning.locked.has(rule.id);
+  slider.disabled = locked || !state.sessionId;
+  if (locked) {
+    slider.title = "This rule is the product's ethical floor rather than a preference.";
+  } else if (!state.sessionId) {
+    slider.title = "Start a session to retune the rules.";
+  }
+
+  slider.addEventListener("input", () => { readout.textContent = Number(slider.value).toFixed(2); });
+  slider.addEventListener("change", async () => {
+    const weight = Number(slider.value);
+    try {
+      const { rule: saved } = await api(`/api/session/${state.sessionId}/rules/weight`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rule_id: rule.id, weight }),
+      });
+      rule.weight = saved.weight;
+      rule.tuned = saved.tuned;
+      rule.history = saved.history;
+      snack(`${rule.id} now competes at ${saved.weight.toFixed(2)}.`);
+      renderRuleBase();
+    } catch (error) {
+      // Put the slider back where it was: the refusal is the server's, and pretending
+      // the change landed would make the panel lie about the policy in force.
+      slider.value = String(rule.weight);
+      readout.textContent = rule.weight.toFixed(2);
+      snack(error.message, true);
+    }
+  });
+
+  control.appendChild(slider);
+  control.appendChild(readout);
+  card.appendChild(control);
+
+  (rule.history || []).forEach((line) => card.appendChild(el("div", "why", line)));
+  return card;
+}
+
+function renderRuleBase() {
+  const list = $("rules-list");
+  list.textContent = "";
+  reasoning.rules.forEach((rule) => list.appendChild(ruleCard(rule)));
+  const tuned = reasoning.rules.filter((rule) => rule.tuned).length;
+  $("rules-count").textContent =
+    `${reasoning.rules.length} rules${tuned ? ` · ${tuned} tuned for you` : " · all at defaults"}`;
+}
+
+async function loadReasoning() {
+  try {
+    const query = state.sessionId ? `?session_id=${state.sessionId}` : "";
+    const payload = await api(`/api/rules${query}`);
+    reasoning.rules = payload.rules;
+    reasoning.locked = new Set(payload.protected || []);
+    reasoning.loaded = true;
+    renderRuleBase();
+    // A rule naming a percept that does not exist can never fire, and a rule base
+    // nobody is told about is one nobody can trust.
+    if (payload.problems && payload.problems.length) {
+      snack(`Rule base problems: ${payload.problems.join("; ")}`, true);
+    }
+  } catch (error) {
+    snack(`Could not read the rule base: ${error.message}`, true);
+  }
+  refreshTrace();
+}
+
+$("btn-reset-rules").addEventListener("click", async (event) => {
+  if (!state.sessionId) { snack("Start a session first.", true); return; }
+  if (!window.confirm("Put every rule back to its shipped weight?")) return;
+  const done = withBusy(event.target, "resetting");
+  try {
+    await api(`/api/session/${state.sessionId}/rules/reset`, { method: "POST" });
+    snack("Every rule is back at its shipped weight.");
+    await loadReasoning();
+  } catch (error) {
+    snack(error.message, true);
+  } finally { done(); }
+});
+
+$("btn-expert").addEventListener("click", async (event) => {
+  if (!state.sessionId) { snack("Start a session first — there is nothing to review yet.", true); return; }
+  const done = withBusy(event.target, "reading your session");
+  try {
+    const { review, rules } = await api(`/api/session/${state.sessionId}/expert-review`, { method: "POST" });
+    reasoning.rules = rules;
+    renderRuleBase();
+    renderExpertReview(review);
+  } catch (error) {
+    snack(`Could not review: ${error.message}`, true);
+  } finally { done(); }
+});
+
+function renderExpertReview(review) {
+  const out = $("expert-out");
+  out.textContent = "";
+
+  if (review.profile) {
+    const profile = el("div", "verdict-line", review.profile);
+    out.appendChild(profile);
+  }
+
+  const facts = el("div", "chips");
+  facts.style.marginTop = "12px";
+  if (review.drift_trigger) facts.appendChild(el("span", "chip info", `trigger: ${review.drift_trigger}`));
+  if (review.what_works) facts.appendChild(el("span", "chip allow", `works: ${review.what_works}`));
+  facts.appendChild(el("span", "chip neutral", `confidence: ${review.confidence}`));
+  out.appendChild(facts);
+
+  if (review.evidence_note) {
+    out.appendChild(el("p", "hint", review.evidence_note));
+  }
+
+  // Rejected proposals are shown alongside accepted ones. The claim is that the agent
+  // is policed, and that claim is only checkable if the refusals are visible too.
+  (review.changes || []).forEach((change) => {
+    const card = el("div", "rulecard");
+    const head = el("div", "head");
+    head.appendChild(el("span", "txt", `${change.rule_id}: ${change.from.toFixed(2)} → ${change.to.toFixed(2)}`));
+    head.appendChild(el(
+      "span",
+      `badge ${change.applied ? "tuned" : "locked"}`,
+      change.applied ? "applied" : "rejected",
+    ));
+    card.appendChild(head);
+    if (change.because) card.appendChild(el("div", "why", change.because));
+    if (!change.applied && change.rejected_reason) {
+      card.appendChild(el("div", "why", `Refused: ${change.rejected_reason}`));
+    }
+    out.appendChild(card);
+  });
+
+  if (!(review.changes || []).length) {
+    out.appendChild(el("p", "hint", "No weight changes proposed — the log did not support any."));
+  }
+
+  out.appendChild(el("p", "hint", review.disclaimer || ""));
+}
 
 loadStatus();
 paintTone();
