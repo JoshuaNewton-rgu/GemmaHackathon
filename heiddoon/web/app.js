@@ -21,6 +21,7 @@ const state = {
   autoCadence: 60,
   pageCamStream: null,
   manualBusy: false,
+  breakPrepared: false,
   liveWords: 0,
 };
 
@@ -389,6 +390,14 @@ function subscribe(sessionId) {
     if ((event.kind === "screen" || event.kind === "camera")
         && $("scr-reasoning").classList.contains("active")) {
       refreshTrace({ at: event.at });
+    }
+    // The moment there is work to ask about, get the break question written in the
+    // background. Generating one takes long enough to be felt, and it always happens
+    // at the worst moment — when someone has just decided they need to stop.
+    if (!state.breakPrepared && (event.kind === "diff" || event.detail?.read_work)) {
+      state.breakPrepared = true;
+      api(`/api/session/${state.sessionId}/break/prepare`, { method: "POST" })
+        .catch(() => { state.breakPrepared = false; });
     }
   };
 }
